@@ -1,0 +1,528 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<title>Combined Airspace Risk Model — Exposure Rate × Collision Probability</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root[data-theme="dark"] {
+    --bg: #0B1220; --panel: #131B2E; --panel-raised: #182339; --border: #223047;
+    --text: #E6EDF5; --text-muted: #7C8AA3;
+    --confirmed: #4FD1C5; --confirmed-wash: rgba(79,209,197,0.08);
+    --placeholder: #F2A65A; --placeholder-wash: rgba(242,166,90,0.06);
+    --output: #A78BFA; --output-wash: rgba(167,139,250,0.10);
+    --advisory: #64748B; --advisory-wash: rgba(100,116,139,0.10);
+  }
+  :root[data-theme="light"] {
+    --bg: #F4F6FA; --panel: #FFFFFF; --panel-raised: #EEF1F6; --border: #D7DEE8;
+    --text: #12203A; --text-muted: #5B6B85;
+    --confirmed: #0E8F80; --confirmed-wash: rgba(14,143,128,0.08);
+    --placeholder: #C97A1F; --placeholder-wash: rgba(201,122,31,0.08);
+    --output: #6D28D9; --output-wash: rgba(109,40,217,0.08);
+    --advisory: #5B6B85; --advisory-wash: rgba(91,107,133,0.08);
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font-family:'IBM Plex Sans',sans-serif; }
+  header { padding:18px 28px; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:baseline; flex-wrap:wrap; gap:10px; }
+  header h1 { font-size:16px; font-weight:600; margin:0; }
+  header .sub { font-family:'IBM Plex Mono',monospace; font-size:11px; color:var(--text-muted); }
+  .theme-toggle { display:flex; gap:8px; border:1px solid var(--border); border-radius:20px; padding:4px 6px; background:var(--panel-raised); cursor:pointer; }
+  .theme-toggle .opt { font-family:'IBM Plex Mono',monospace; font-size:10px; padding:4px 10px; border-radius:14px; color:var(--text-muted); }
+  .theme-toggle .opt.active { background:var(--confirmed); color:var(--panel); }
+
+  .shared-row { padding:16px 28px; border-bottom:1px solid var(--border); background:var(--panel-raised); }
+  .shared-row label { font-size:11px; text-transform:uppercase; letter-spacing:0.08em; color:var(--text-muted); display:block; margin-bottom:8px; }
+  .radius-selector { display:flex; gap:8px; }
+  .radius-btn { flex:1; padding:10px; border-radius:6px; border:1px solid var(--border); background:var(--panel); color:var(--text-muted); font-family:'IBM Plex Mono',monospace; font-size:13px; cursor:pointer; text-align:center; }
+  .radius-btn.active { border-color:var(--confirmed); color:var(--confirmed); background:var(--confirmed-wash); font-weight:600; }
+  .shared-note { font-size:11px; color:var(--text-muted); margin-top:8px; line-height:1.5; }
+
+  .main-grid { display:grid; grid-template-columns:1fr 1fr; gap:0; }
+  .panel { padding:22px 26px; border-right:1px solid var(--border); }
+  .panel:last-child { border-right:none; }
+  .panel-title { font-size:13px; font-weight:600; margin:0 0 4px 0; }
+  .panel-subtitle { font-family:'IBM Plex Mono',monospace; font-size:10px; color:var(--text-muted); margin-bottom:18px; }
+
+  .control-group { margin-bottom:20px; }
+  .control-group label { display:block; font-size:11px; text-transform:uppercase; letter-spacing:0.08em; color:var(--text-muted); margin-bottom:6px; }
+  .readout { font-family:'IBM Plex Mono',monospace; font-size:16px; font-weight:500; margin-bottom:6px; }
+  input[type=range] { width:100%; accent-color:var(--confirmed); }
+  .toggle-row { display:flex; gap:8px; }
+  .toggle-btn { flex:1; padding:8px 10px; border-radius:6px; border:1px solid var(--border); background:var(--panel-raised); color:var(--text-muted); font-family:'IBM Plex Mono',monospace; font-size:11px; cursor:pointer; text-align:center; }
+  .toggle-btn.active { border-color:var(--confirmed); color:var(--confirmed); background:var(--confirmed-wash); }
+  .helptext { font-size:10.5px; line-height:1.5; color:var(--text-muted); margin-top:6px; }
+
+  .k-readout-box { background:var(--panel-raised); border:1px solid var(--border); border-radius:8px; padding:14px 16px; margin-top:16px; }
+  .k-readout-box .k-row { display:flex; justify-content:space-between; align-items:baseline; padding:6px 0; }
+  .k-readout-box .k-label { font-family:'IBM Plex Mono',monospace; font-size:11px; color:var(--text-muted); }
+  .k-readout-box .k-value { font-family:'IBM Plex Mono',monospace; font-size:15px; font-weight:600; }
+  .k-readout-box .k-sub { font-size:9.5px; color:var(--text-muted); }
+  .advisory-box { background:var(--advisory-wash); border-left:2px solid var(--advisory); border-radius:0 4px 4px 0; padding:10px 12px; margin-top:10px; font-size:11px; line-height:1.5; color:var(--text-muted); }
+
+  .output-section { padding:24px 28px; background:var(--output-wash); border-top:2px solid var(--output); }
+  .output-title { font-size:13px; font-weight:600; margin:0 0 16px 0; color:var(--output); }
+  .output-grid { display:grid; grid-template-columns:1fr 1fr; gap:20px; }
+  .output-card { background:var(--panel); border:1px solid var(--border); border-radius:8px; padding:18px 20px; }
+  .output-card .oc-label { font-family:'IBM Plex Mono',monospace; font-size:11px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.06em; }
+  .output-card .oc-value { font-family:'IBM Plex Mono',monospace; font-size:28px; font-weight:600; margin:8px 0 4px 0; }
+  .output-card .oc-sub { font-size:11px; color:var(--text-muted); }
+  .badge { display:inline-block; font-family:'IBM Plex Mono',monospace; font-size:9.5px; letter-spacing:0.05em; padding:2px 7px; border-radius:4px; margin-left:6px; vertical-align:middle; }
+  .badge.confirmed { background:var(--confirmed-wash); color:var(--confirmed); }
+  .badge.placeholder { background:var(--placeholder-wash); color:var(--placeholder); }
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>Combined Airspace Risk Model</h1>
+    <div class="sub">EXPOSURE RATE (LAYERS 1+2) × FINE-GRAINED COLLISION PROBABILITY</div>
+  </div>
+  <div class="theme-toggle" id="theme-toggle" onclick="toggleTheme()">
+    <span class="opt" id="opt-dark">DARK</span>
+    <span class="opt" id="opt-light">LIGHT</span>
+  </div>
+</header>
+
+<div class="shared-row">
+  <label>Shared — DFR Loiter Radius (used by both layers)</label>
+  <div class="radius-selector" id="radius-selector"></div>
+  <div class="shared-note">
+    Only these four values are calibrated (no fitted curve exists between them yet), so this control snaps to exact stops rather than sliding continuously.
+  </div>
+</div>
+
+<div class="main-grid">
+  <div class="panel">
+    <div class="panel-title">Airspace Exposure — how often does Scenario 3 happen?</div>
+    <div class="panel-subtitle">5-MILE REGION, SINGLE DELIVERY HUB, 8AM–8PM / 365-DAY OPERATING ASSUMPTION</div>
+
+    <div class="control-group">
+      <label>Route type</label>
+      <div class="toggle-row">
+        <button class="toggle-btn" id="btn-oab" onclick="setRoute('out_and_back')">Out-and-back</button>
+        <button class="toggle-btn" id="btn-tri" onclick="setRoute('triangular')">Triangular</button>
+      </div>
+    </div>
+
+    <div class="control-group">
+      <label>Deliveries per day</label>
+      <div class="readout"><span id="ndel-readout">1000</span></div>
+      <input type="range" id="ndel-slider" min="100" max="2000" step="10" value="1000">
+    </div>
+
+    <div class="control-group">
+      <label>Delivery timing shape</label>
+      <div class="toggle-row">
+        <button class="toggle-btn" id="btn-peaked" onclick="setTiming('peaked')">Peaked</button>
+        <button class="toggle-btn" id="btn-uniform" onclick="setTiming('uniform')">Uniform</button>
+      </div>
+      <div class="helptext">Doesn't change the numbers below — confirmed invariant, as long as DFR call timing stays uncorrelated with delivery timing (see spec §13.4). Kept here for comparison.</div>
+    </div>
+
+    <div class="control-group">
+      <label>DFR docks: <span id="ndocks-readout">3</span></label>
+      <input type="range" id="ndocks-slider" min="1" max="6" step="1" value="3">
+    </div>
+
+    <div class="control-group">
+      <label>Calls per dock per day: <span id="calls-readout">8</span></label>
+      <input type="range" id="calls-slider" min="1" max="20" step="1" value="8">
+      <div class="helptext">Total DFR events/day = docks × calls/dock = <span id="total-dfr-readout">24</span>. Only this product matters — the split doesn't (confirmed, spec §13.2).</div>
+    </div>
+
+    <div class="control-group">
+      <label>DFR loiter duration (minutes): <span id="loiter-readout">15</span></label>
+      <input type="range" id="loiter-slider" min="5" max="30" step="1" value="15">
+    </div>
+
+    <div class="k-readout-box">
+      <div class="k-row"><span class="k-label">Scenario 3a (cruise × loiter overlap)</span><span class="k-value" id="k3a-annual">—</span></div>
+      <div class="k-row"><span class="k-sub">daily equivalent</span><span class="k-sub" id="k3a-daily">—</span></div>
+      <div class="k-row"><span class="k-label">Scenario 3b (hover × loiter overlap)</span><span class="k-value" id="k3b-annual">—</span></div>
+      <div class="k-row"><span class="k-sub">daily equivalent</span><span class="k-sub" id="k3b-daily">—</span></div>
+    </div>
+    <div class="advisory-box">
+      <strong>Scenario 3c (DFR transit vs. delivery route): <span id="k3c-annual">—</span>/year</strong> (<span id="k3c-daily">—</span>/day).
+      These events are not incorporated into the collision model. Their effect on an operational safety case can be considered in relation to the nominal nonconformance safety case for strategic conflict detection.
+    </div>
+
+    <div class="k-readout-box" style="margin-top:14px; border:1px solid var(--confirmed);">
+      <div class="k-row"><span class="k-label">Per-operation: Scenario 3 overlap (3a+3b+3c)</span><span class="k-value" id="rule3-per-op">—</span></div>
+      <div class="k-row"><span class="k-label">Per-operation: Scenario 1 or Scenario 2 (no overlap)</span><span class="k-value" id="rule12-per-op">—</span></div>
+    </div>
+    <div class="helptext">
+      The chance that a single, randomly-chosen delivery flight experiences each outcome — as opposed to K above, which is the number of such flights expected per year. Scenario 3 here includes Scenario 3c (a genuine safety-net miss), even though Scenario 3c isn't part of the collision-probability calculation below.
+    </div>
+
+  </div>
+
+
+  <div class="panel">
+    <div class="panel-title">Fine-Grained Encounter — given Scenario 3 happens, what's the collision odds?</div>
+    <div class="panel-subtitle">DRONE A FIXED: 3M/0.5M, 45MPH · DRONE B SIZE AND ORBIT SPEED SWEEPABLE</div>
+
+    <div class="control-group">
+      <label>Threshold definition</label>
+      <div class="toggle-row">
+        <button class="toggle-btn" id="btn-snmac" onclick="setThreshold('snmac')">sNMAC</button>
+        <button class="toggle-btn" id="btn-contact" onclick="setThreshold('contact')">Contact</button>
+      </div>
+      <div id="threshold-badge" style="margin-top:8px;"></div>
+    </div>
+
+    <div class="control-group">
+      <label>Drone B size class: <span id="size-readout">1</span> (<span id="size-dims-readout">10in/3in</span>)</label>
+      <input type="range" id="size-slider" min="1" max="5" step="0.1" value="1">
+      <div class="helptext">1 = smallest public-safety drone (10in/3in) → 5 = largest (3m/0.5m).</div>
+    </div>
+
+    <div class="control-group">
+      <label>Drone B orbital speed (mph): <span id="vb-readout">45</span></label>
+      <input type="range" id="vb-slider" min="30" max="60" step="1" value="45">
+    </div>
+
+    <div class="k-readout-box">
+      <div class="k-row"><span class="k-label">Scenario 3a probability (per-encounter, cruise)</span><span class="k-value" id="p3a-readout">—</span></div>
+      <div class="k-row"><span class="k-label">Scenario 3b probability (per-encounter, hover)</span><span class="k-value" id="p3b-readout">—</span></div>
+    </div>
+    <div class="helptext" style="margin-top:10px;">
+      Scenario 3b's probability is typically higher than Scenario 3a's at the same radius: a stationary hover point sits exposed to the full orbit passing by, whereas a cruising drone only clips through briefly.
+    </div>
+
+    <div class="control-group" style="margin-top:22px;">
+      <label>Schematic — top-down view (illustrative, not to scale for loiter radii)</label>
+      <div id="schematic-container" style="background:var(--panel-raised); border:1px solid var(--border); border-radius:8px; padding:8px;"></div>
+      <div class="helptext" id="schematic-legend"></div>
+    </div>
+  </div>
+</div>
+
+<div class="output-section">
+  <div class="output-title">Combined Output — P(≥1 collision), one year</div>
+  <div class="output-grid">
+    <div class="output-card">
+      <div class="oc-label">P(collision) — 1 year<span class="badge" id="badge-annual"></span></div>
+      <div class="oc-value" id="p-annual">—</div>
+      <div class="oc-sub">1 − (1−p)^K, combined across Scenario 3a and Scenario 3b, using annualized K</div>
+    </div>
+    <div class="output-card">
+      <div class="oc-label">Equivalent single-day probability<span class="badge" id="badge-daily"></span></div>
+      <div class="oc-value" id="p-daily">—</div>
+      <div class="oc-sub">Same formula, using daily-equivalent K</div>
+    </div>
+  </div>
+</div>
+
+<script>
+const P3A_GRID = [{"b_size_class": 1, "b_h_m": 0.254, "b_v_m": 0.076, "v_B_mph": 30, "r_max_m": 50.0, "p_snmac": 0.010566457456105505, "ci_snmac": [0.009709905561447001, 0.011497692136429455], "p_contact_point": 0.0004965440533884166, "ci_contact": [0.00033636750736755456, 0.000732939955658783], "p_contact_upper_bound_USED": 0.000732939955658783, "n_valid_snmac": 50348, "n_valid_contact": 50348}, {"b_size_class": 1, "b_h_m": 0.254, "b_v_m": 0.076, "v_B_mph": 40, "r_max_m": 50.0, "p_snmac": 0.011976642567728608, "ci_snmac": [0.011062980994295462, 0.012964771746331209], "p_contact_point": 0.0005164058155239533, "ci_contact": [0.00035244683149503387, 0.0007565811250911658], "p_contact_upper_bound_USED": 0.0007565811250911658, "n_valid_snmac": 50348, "n_valid_contact": 50348}, {"b_size_class": 1, "b_h_m": 0.254, "b_v_m": 0.076, "v_B_mph": 50, "r_max_m": 50.0, "p_snmac": 0.011797886708508778, "ci_snmac": [0.010891264945819263, 0.01277900335276865], "p_contact_point": 0.0006951616747437832, "ci_contact": [0.0004999071701790321, 0.000966605228445927], "p_contact_upper_bound_USED": 0.000966605228445927, "n_valid_snmac": 50348, "n_valid_contact": 50348}, {"b_size_class": 1, "b_h_m": 0.254, "b_v_m": 0.076, "v_B_mph": 60, "r_max_m": 50.0, "p_snmac": 0.013148486533725271, "ci_snmac": [0.012189962807811865, 0.014181299052846673], "p_contact_point": 0.0007547469611503933, "ci_contact": [0.0005499565195009426, 0.001035717359803603], "p_contact_upper_bound_USED": 0.001035717359803603, "n_valid_snmac": 50348, "n_valid_contact": 50348}, {"b_size_class": 2, "b_h_m": 0.4709, "b_v_m": 0.1217, "v_B_mph": 30, "r_max_m": 50.0, "p_snmac": 0.010923969174545165, "ci_snmac": [0.010052584555148425, 0.01186998202680555], "p_contact_point": 0.0005362675776594899, "ci_contact": [0.0003685957598400894, 0.0007801526903059723], "p_contact_upper_bound_USED": 0.0007801526903059723, "n_valid_snmac": 50348, "n_valid_contact": 50348}, {"b_size_class": 2, "b_h_m": 0.4709, "b_v_m": 0.1217, "v_B_mph": 40, "r_max_m": 50.0, "p_snmac": 0.012314292524032731, "ci_snmac": [0.011387480138481442, 0.013315520992662885], "p_contact_point": 0.0006355763883371733, "ci_contact": [0.0004502653012221821, 0.0008970856167231906], "p_contact_upper_bound_USED": 0.0008970856167231906, "n_valid_snmac": 50348, "n_valid_contact": 50348}, {"b_size_class": 2, "b_h_m": 0.4709, "b_v_m": 0.1217, "v_B_mph": 50, "r_max_m": 50.0, "p_snmac": 0.011996504329864146, "ci_snmac": [0.011082063915450201, 0.012985409318736336], "p_contact_point": 0.0008143322475570033, "ci_contact": [0.0006003671178578037, 0.0011044682421263285], "p_contact_upper_bound_USED": 0.0011044682421263285, "n_valid_snmac": 50348, "n_valid_contact": 50348}, {"b_size_class": 2, "b_h_m": 0.4709, "b_v_m": 0.1217, "v_B_mph": 60, "r_max_m": 50.0, "p_snmac": 0.013505998252164931, "ci_snmac": [0.012534203905935978, 0.014552026838800079], "p_contact_point": 0.0009136410582346866, "ci_contact": [0.0006850869683983167, 0.0012183508593851262], "p_contact_upper_bound_USED": 0.0012183508593851262, "n_valid_snmac": 50348, "n_valid_contact": 50348}, {"b_size_class": 3, "b_h_m": 0.8729, "b_v_m": 0.1949, "v_B_mph": 30, "r_max_m": 50.0, "p_snmac": 0.01149996027647573, "ci_snmac": [0.010605195040091685, 0.012469265855098298], "p_contact_point": 0.0006355763883371733, "ci_contact": [0.0004502653012221821, 0.0008970856167231906], "p_contact_upper_bound_USED": 0.0008970856167231906, "n_valid_snmac": 50348, "n_valid_contact": 50348}, {"b_size_class": 3, "b_h_m": 0.8729, "b_v_m": 0.1949, "v_B_mph": 40, "r_max_m": 50.0, "p_snmac": 0.012890283625963296, "ci_snmac": [0.011941461005684169, 0.013913434438696165], "p_contact_point": 0.0007547469611503933, "ci_contact": [0.0005499565195009426, 0.001035717359803603], "p_contact_upper_bound_USED": 0.001035717359803603, "n_valid_snmac": 50348, "n_valid_contact": 50348}, {"b_size_class": 3, "b_h_m": 0.8729, "b_v_m": 0.1949, "v_B_mph": 50, "r_max_m": 50.0, "p_snmac": 0.01269166600460793, "ci_snmac": [0.011750374491851538, 0.013707316016930175], "p_contact_point": 0.0008937792960991499, "ci_contact": [0.0006680782792095376, 0.0011956390550140433], "p_contact_upper_bound_USED": 0.0011956390550140433, "n_valid_snmac": 50348, "n_valid_contact": 50348}, {"b_size_class": 3, "b_h_m": 0.8729, "b_v_m": 0.1949, "v_B_mph": 60, "r_max_m": 50.0, "p_snmac": 0.014141574640502105, "ci_snmac": [0.013146630934050068, 0.015210655604601579], "p_contact_point": 0.0011718439659966632, "ci_contact": [0.0009086553226935587, 0.0015111489213680926], "p_contact_upper_bound_USED": 0.0015111489213680926, "n_valid_snmac": 50348, "n_valid_contact": 50348}, {"b_size_class": 4, "b_h_m": 1.6183, "b_v_m": 0.3122, "v_B_mph": 30, "r_max_m": 50.0, "p_snmac": 0.012254707237626122, "ci_snmac": [0.011330201910422043, 0.013253637740042698], "p_contact_point": 0.0007746087232859299, "ci_contact": [0.000566721941451475, 0.0010586724314129328], "p_contact_upper_bound_USED": 0.0010586724314129328, "n_valid_snmac": 50348, "n_valid_contact": 50348}, {"b_size_class": 4, "b_h_m": 1.6183, "b_v_m": 0.3122, "v_B_mph": 40, "r_max_m": 50.0, "p_snmac": 0.013744339397791372, "ci_snmac": [0.012763799037425463, 0.014799077630028941], "p_contact_point": 0.0011519822038611265, "ci_contact": [0.0008913147166697635, 0.001488769033832025], "p_contact_upper_bound_USED": 0.001488769033832025, "n_valid_snmac": 50348, "n_valid_contact": 50348}, {"b_size_class": 4, "b_h_m": 1.6183, "b_v_m": 0.3122, "v_B_mph": 50, "r_max_m": 50.0, "p_snmac": 0.014002542305553348, "ci_snmac": [0.013012615555582592, 0.01506662752815002], "p_contact_point": 0.00131087630094542, "ci_contact": [0.0010306001453289097, 0.0016672475536517767], "p_contact_upper_bound_USED": 0.0016672475536517767, "n_valid_snmac": 50348, "n_valid_contact": 50348}, {"b_size_class": 4, "b_h_m": 1.6183, "b_v_m": 0.3122, "v_B_mph": 60, "r_max_m": 50.0, "p_snmac": 0.015273695082227695, "ci_snmac": [0.014238820264310025, 0.016382534407253766], "p_contact_point": 0.0015492174465718599, "ci_contact": [0.0012416157130212152, 0.0019328779086778174], "p_contact_upper_bound_USED": 0.0019328779086778174, "n_valid_snmac": 50348, "n_valid_contact": 50348}, {"b_size_class": 5, "b_h_m": 3.0, "b_v_m": 0.5, "v_B_mph": 30, "r_max_m": 50.0, "p_snmac": 0.014201159926908716, "ci_snmac": [0.013204073951888367, 0.015272374067442869], "p_contact_point": 0.0015094939223007865, "ci_contact": [0.001206293779030333, 0.001888758855548975], "p_contact_upper_bound_USED": 0.001888758855548975, "n_valid_snmac": 50348, "n_valid_contact": 50348}, {"b_size_class": 5, "b_h_m": 3.0, "b_v_m": 0.5, "v_B_mph": 40, "r_max_m": 50.0, "p_snmac": 0.015690792087073965, "ci_snmac": [0.01464159688783841, 0.016813888148482486], "p_contact_point": 0.0019861762135536666, "ci_contact": [0.0016334315558471197, 0.0024149129241688803], "p_contact_upper_bound_USED": 0.0024149129241688803, "n_valid_snmac": 50348, "n_valid_contact": 50348}, {"b_size_class": 5, "b_h_m": 3.0, "b_v_m": 0.5, "v_B_mph": 50, "r_max_m": 50.0, "p_snmac": 0.016167474378326847, "ci_snmac": [0.015102154554630477, 0.017306622327127114], "p_contact_point": 0.0018272821164693732, "ci_contact": [0.0014903201486067262, 0.002240260382930376], "p_contact_upper_bound_USED": 0.002240260382930376, "n_valid_snmac": 50348, "n_valid_contact": 50348}, {"b_size_class": 5, "b_h_m": 3.0, "b_v_m": 0.5, "v_B_mph": 60, "r_max_m": 50.0, "p_snmac": 0.017359180106459045, "ci_snmac": [0.01625460678552173, 0.01853739970982759], "p_contact_point": 0.0023436879319933264, "ci_contact": [0.00195758769237292, 0.002805725671720598], "p_contact_upper_bound_USED": 0.002805725671720598, "n_valid_snmac": 50348, "n_valid_contact": 50348}, {"b_size_class": 1, "b_h_m": 0.254, "b_v_m": 0.076, "v_B_mph": 30, "r_max_m": 150.0, "p_snmac": 0.004012075951378406, "ci_snmac": [0.003496468493741158, 0.004603366329380782], "p_contact_point": 0.00025820290776197666, "ci_contact": [0.00015090632151062652, 0.00044175521879736494], "p_contact_upper_bound_USED": 0.00044175521879736494, "n_valid_snmac": 50348, "n_valid_contact": 50348}, {"b_size_class": 1, "b_h_m": 0.254, "b_v_m": 0.076, "v_B_mph": 40, "r_max_m": 150.0, "p_snmac": 0.00500516405815524, "ci_snmac": [0.004425366361042673, 0.005660493140072376], "p_contact_point": 0.00029792643203304997, "ci_contact": [0.00018056150550750595, 0.0004915410219202099], "p_contact_upper_bound_USED": 0.0004915410219202099, "n_valid_snmac": 50348, "n_valid_contact": 50348}, {"b_size_class": 1, "b_h_m": 0.254, "b_v_m": 0.076, "v_B_mph": 50, "r_max_m": 150.0, "p_snmac": 0.005104472868832923, "ci_snmac": [0.004518625221659154, 0.005765836747255206], "p_contact_point": 0.0002184793834909033, "ci_contact": [0.00012200256932335437, 0.00039121798386491274], "p_contact_upper_bound_USED": 0.00039121798386491274, "n_valid_snmac": 50348, "n_valid_contact": 50348}, {"b_size_class": 1, "b_h_m": 0.254, "b_v_m": 0.076, "v_B_mph": 60, "r_max_m": 150.0, "p_snmac": 0.00542226106300151, "ci_snmac": [0.0048174431616331, 0.006102546704239055], "p_contact_point": 0.00025820290776197666, "ci_contact": [0.00015090632151062652, 0.00044175521879736494], "p_contact_upper_bound_USED": 0.00044175521879736494, "n_valid_snmac": 50348, "n_valid_contact": 50348}, {"b_size_class": 2, "b_h_m": 0.4709, "b_v_m": 0.1217, "v_B_mph": 30, "r_max_m": 150.0, "p_snmac": 0.004290140621275919, "ci_snmac": [0.003755821944008643, 0.0049000997889513676], "p_contact_point": 0.0002780646698975133, "ci_contact": [0.0001656496681938376, 0.0004667323656740159], "p_contact_upper_bound_USED": 0.0004667323656740159, "n_valid_snmac": 50348, "n_valid_contact": 50348}, {"b_size_class": 2, "b_h_m": 0.4709, "b_v_m": 0.1217, "v_B_mph": 40, "r_max_m": 150.0, "p_snmac": 0.005144196393103997, "ci_snmac": [0.004555945432526637, 0.005807957523507447], "p_contact_point": 0.00035751171843965995, "ci_contact": [0.0002261628167575875, 0.0005651011913497148], "p_contact_upper_bound_USED": 0.0005651011913497148, "n_valid_snmac": 50348, "n_valid_contact": 50348}, {"b_size_class": 2, "b_h_m": 0.4709, "b_v_m": 0.1217, "v_B_mph": 50, "r_max_m": 150.0, "p_snmac": 0.005382537538730436, "ci_snmac": [0.004780059598445611, 0.006060489280306819], "p_contact_point": 0.00029792643203304997, "ci_contact": [0.00018056150550750595, 0.0004915410219202099], "p_contact_upper_bound_USED": 0.0004915410219202099, "n_valid_snmac": 50348, "n_valid_contact": 50348}, {"b_size_class": 2, "b_h_m": 0.4709, "b_v_m": 0.1217, "v_B_mph": 60, "r_max_m": 150.0, "p_snmac": 0.005720187495034559, "ci_snmac": [0.005098089475544478, 0.006417707793725609], "p_contact_point": 0.0003376499563041233, "ci_contact": [0.0002108304986747226, 0.0005407130158727176], "p_contact_upper_bound_USED": 0.0005407130158727176, "n_valid_snmac": 50348, "n_valid_contact": 50348}, {"b_size_class": 3, "b_h_m": 0.8729, "b_v_m": 0.1949, "v_B_mph": 30, "r_max_m": 150.0, "p_snmac": 0.004786684674664336, "ci_snmac": [0.004220413969457595, 0.00542852010249897], "p_contact_point": 0.00035751171843965995, "ci_contact": [0.0002261628167575875, 0.0005651011913497148], "p_contact_upper_bound_USED": 0.0005651011913497148, "n_valid_snmac": 50348, "n_valid_contact": 50348}, {"b_size_class": 3, "b_h_m": 0.8729, "b_v_m": 0.1949, "v_B_mph": 40, "r_max_m": 150.0, "p_snmac": 0.005521569873679193, "ci_snmac": [0.004910939732372552, 0.006207652601298914], "p_contact_point": 0.0003972352427107333, "ci_contact": [0.00025717281813264644, 0.0006135321770943801], "p_contact_upper_bound_USED": 0.0006135321770943801, "n_valid_snmac": 50348, "n_valid_contact": 50348}, {"b_size_class": 3, "b_h_m": 0.8729, "b_v_m": 0.1949, "v_B_mph": 50, "r_max_m": 150.0, "p_snmac": 0.0056010169222213396, "ci_snmac": [0.004985774970883669, 0.006291699337027246], "p_contact_point": 0.00035751171843965995, "ci_contact": [0.0002261628167575875, 0.0005651011913497148], "p_contact_upper_bound_USED": 0.0005651011913497148, "n_valid_snmac": 50348, "n_valid_contact": 50348}, {"b_size_class": 3, "b_h_m": 0.8729, "b_v_m": 0.1949, "v_B_mph": 60, "r_max_m": 150.0, "p_snmac": 0.006137284499880829, "ci_snmac": [0.005491742871047465, 0.006858184762979727], "p_contact_point": 0.00037737348057519663, "ci_contact": [0.00024161317818053793, 0.0005893713234866265], "p_contact_upper_bound_USED": 0.0005893713234866265, "n_valid_snmac": 50348, "n_valid_contact": 50348}, {"b_size_class": 4, "b_h_m": 1.6183, "b_v_m": 0.3122, "v_B_mph": 30, "r_max_m": 150.0, "p_snmac": 0.0052236434416461424, "ci_snmac": [0.004630613827345569, 0.005892171102927963], "p_contact_point": 0.00047668229125287997, "ci_contact": [0.0003203618479915133, 0.000709225121474962], "p_contact_upper_bound_USED": 0.000709225121474962, "n_valid_snmac": 50348, "n_valid_contact": 50348}, {"b_size_class": 4, "b_h_m": 1.6183, "b_v_m": 0.3122, "v_B_mph": 40, "r_max_m": 150.0, "p_snmac": 0.006137284499880829, "ci_snmac": [0.005491742871047465, 0.006858184762979727], "p_contact_point": 0.0005362675776594899, "ci_contact": [0.0003685957598400894, 0.0007801526903059723], "p_contact_upper_bound_USED": 0.0007801526903059723, "n_valid_snmac": 50348, "n_valid_contact": 50348}, {"b_size_class": 4, "b_h_m": 1.6183, "b_v_m": 0.3122, "v_B_mph": 50, "r_max_m": 150.0, "p_snmac": 0.00607769921347422, "ci_snmac": [0.005435456119620112, 0.006795310033727495], "p_contact_point": 0.0005362675776594899, "ci_contact": [0.0003685957598400894, 0.0007801526903059723], "p_contact_upper_bound_USED": 0.0007801526903059723, "n_valid_snmac": 50348, "n_valid_contact": 50348}, {"b_size_class": 4, "b_h_m": 1.6183, "b_v_m": 0.3122, "v_B_mph": 60, "r_max_m": 150.0, "p_snmac": 0.00667355207754032, "ci_snmac": [0.005999026011362767, 0.007423354948780706], "p_contact_point": 0.0005362675776594899, "ci_contact": [0.0003685957598400894, 0.0007801526903059723], "p_contact_upper_bound_USED": 0.0007801526903059723, "n_valid_snmac": 50348, "n_valid_contact": 50348}, {"b_size_class": 5, "b_h_m": 3.0, "b_v_m": 0.5, "v_B_mph": 30, "r_max_m": 150.0, "p_snmac": 0.006236593310558512, "ci_snmac": [0.00558559000853767, 0.006962940093288832], "p_contact_point": 0.0006157146262016366, "ci_contact": [0.0004338180426633399, 0.0008738123817221704], "p_contact_upper_bound_USED": 0.0008738123817221704, "n_valid_snmac": 50348, "n_valid_contact": 50348}, {"b_size_class": 5, "b_h_m": 3.0, "b_v_m": 0.5, "v_B_mph": 40, "r_max_m": 150.0, "p_snmac": 0.007090649082386589, "ci_snmac": [0.006394388990035856, 0.00786212233486472], "p_contact_point": 0.0009533645825057599, "ci_contact": [0.0007191942671514307, 0.001263684547751737], "p_contact_upper_bound_USED": 0.001263684547751737, "n_valid_snmac": 50348, "n_valid_contact": 50348}, {"b_size_class": 5, "b_h_m": 3.0, "b_v_m": 0.5, "v_B_mph": 50, "r_max_m": 150.0, "p_snmac": 0.006911893223166759, "ci_snmac": [0.006224865880290091, 0.0076741610025717255], "p_contact_point": 0.0008143322475570033, "ci_contact": [0.0006003671178578037, 0.0011044682421263285], "p_contact_upper_bound_USED": 0.0011044682421263285, "n_valid_snmac": 50348, "n_valid_contact": 50348}, {"b_size_class": 5, "b_h_m": 3.0, "b_v_m": 0.5, "v_B_mph": 60, "r_max_m": 150.0, "p_snmac": 0.00792484309207913, "ci_snmac": [0.00718698626876081, 0.008737785785653982], "p_contact_point": 0.0008540557718280765, "ci_contact": [0.0006341557907457073, 0.001150120556358149], "p_contact_upper_bound_USED": 0.001150120556358149, "n_valid_snmac": 50348, "n_valid_contact": 50348}, {"b_size_class": 1, "b_h_m": 0.254, "b_v_m": 0.076, "v_B_mph": 30, "r_max_m": 300.0, "p_snmac": 0.0017875585921982998, "ci_snmac": [0.0014546478619848699, 0.002196491682432508], "p_contact_point": 9.930881067768333e-05, "ci_contact": [4.241888451314895e-05, 0.00023247870731594517], "p_contact_upper_bound_USED": 0.00023247870731594517, "n_valid_snmac": 50348, "n_valid_contact": 50348}, {"b_size_class": 1, "b_h_m": 0.254, "b_v_m": 0.076, "v_B_mph": 40, "r_max_m": 300.0, "p_snmac": 0.0026416143640263763, "ci_snmac": [0.002229616166167671, 0.00312950460132378], "p_contact_point": 0.00011917057281321999, "ci_contact": [5.46173049372692e-05, 0.0002600007804516871], "p_contact_upper_bound_USED": 0.0002600007804516871, "n_valid_snmac": 50348, "n_valid_contact": 50348}, {"b_size_class": 1, "b_h_m": 0.254, "b_v_m": 0.076, "v_B_mph": 50, "r_max_m": 300.0, "p_snmac": 0.0026614761261619132, "ci_snmac": [0.0022478046393689267, 0.0031510366216823873], "p_contact_point": 5.9585286406609996e-05, "ci_contact": [2.0264210004330285e-05, 0.00017519239470503947], "p_contact_upper_bound_USED": 0.00017519239470503947, "n_valid_snmac": 50348, "n_valid_contact": 50348}, {"b_size_class": 1, "b_h_m": 0.254, "b_v_m": 0.076, "v_B_mph": 60, "r_max_m": 300.0, "p_snmac": 0.0028005084611106698, "ci_snmac": [0.002375294703467219, 0.00330159001250313], "p_contact_point": 0.00017875585921982997, "ci_contact": [9.404859007574736e-05, 0.0003397309759927954], "p_contact_upper_bound_USED": 0.0003397309759927954, "n_valid_snmac": 50348, "n_valid_contact": 50348}, {"b_size_class": 2, "b_h_m": 0.4709, "b_v_m": 0.1217, "v_B_mph": 30, "r_max_m": 300.0, "p_snmac": 0.0018670056407404465, "ci_snmac": [0.0015260359933057558, 0.0022839855253510713], "p_contact_point": 0.00011917057281321999, "ci_contact": [5.46173049372692e-05, 0.0002600007804516871], "p_contact_upper_bound_USED": 0.0002600007804516871, "n_valid_snmac": 50348, "n_valid_contact": 50348}, {"b_size_class": 2, "b_h_m": 0.4709, "b_v_m": 0.1217, "v_B_mph": 40, "r_max_m": 300.0, "p_snmac": 0.0027607849368395964, "ci_snmac": [0.0023388391366662344, 0.00325860459218439], "p_contact_point": 0.00017875585921982997, "ci_contact": [9.404859007574736e-05, 0.0003397309759927954], "p_contact_upper_bound_USED": 0.0003397309759927954, "n_valid_snmac": 50348, "n_valid_contact": 50348}, {"b_size_class": 2, "b_h_m": 0.4709, "b_v_m": 0.1217, "v_B_mph": 50, "r_max_m": 300.0, "p_snmac": 0.0027607849368395964, "ci_snmac": [0.0023388391366662344, 0.00325860459218439], "p_contact_point": 7.944704854214666e-05, "ci_contact": [3.0895326056642875e-05, 0.00020428177221258907], "p_contact_upper_bound_USED": 0.00020428177221258907, "n_valid_snmac": 50348, "n_valid_contact": 50348}, {"b_size_class": 2, "b_h_m": 0.4709, "b_v_m": 0.1217, "v_B_mph": 60, "r_max_m": 300.0, "p_snmac": 0.0028799555096528165, "ci_snmac": [0.0024482746986916114, 0.003387491991518186], "p_contact_point": 0.00019861762135536665, "ci_contact": [0.00010789108807005791, 0.000365608971558347], "p_contact_upper_bound_USED": 0.000365608971558347, "n_valid_snmac": 50348, "n_valid_contact": 50348}, {"b_size_class": 3, "b_h_m": 0.8729, "b_v_m": 0.1949, "v_B_mph": 30, "r_max_m": 300.0, "p_snmac": 0.00202589973782474, "ci_snmac": [0.0016693086440187181, 0.002458476823117006], "p_contact_point": 0.00015889409708429332, "ci_contact": [8.051674589700119e-05, 0.0003135423266116794], "p_contact_upper_bound_USED": 0.0003135423266116794, "n_valid_snmac": 50348, "n_valid_contact": 50348}, {"b_size_class": 3, "b_h_m": 0.8729, "b_v_m": 0.1949, "v_B_mph": 40, "r_max_m": 300.0, "p_snmac": 0.0029792643203304997, "ci_snmac": [0.002539624017272555, 0.003494745140736553], "p_contact_point": 0.00029792643203304997, "ci_contact": [0.00018056150550750595, 0.0004915410219202099], "p_contact_upper_bound_USED": 0.0004915410219202099, "n_valid_snmac": 50348, "n_valid_contact": 50348}, {"b_size_class": 3, "b_h_m": 0.8729, "b_v_m": 0.1949, "v_B_mph": 50, "r_max_m": 300.0, "p_snmac": 0.0029792643203304997, "ci_snmac": [0.002539624017272555, 0.003494745140736553], "p_contact_point": 9.930881067768333e-05, "ci_contact": [4.241888451314895e-05, 0.00023247870731594517], "p_contact_upper_bound_USED": 0.00023247870731594517, "n_valid_snmac": 50348, "n_valid_contact": 50348}, {"b_size_class": 3, "b_h_m": 0.8729, "b_v_m": 0.1949, "v_B_mph": 60, "r_max_m": 300.0, "p_snmac": 0.0029792643203304997, "ci_snmac": [0.002539624017272555, 0.003494745140736553], "p_contact_point": 0.00023834114562643998, "ci_contact": [0.000136349922978198, 0.00041659112376993127], "p_contact_upper_bound_USED": 0.00041659112376993127, "n_valid_snmac": 50348, "n_valid_contact": 50348}, {"b_size_class": 4, "b_h_m": 1.6183, "b_v_m": 0.3122, "v_B_mph": 30, "r_max_m": 300.0, "p_snmac": 0.0023436879319933264, "ci_snmac": [0.00195758769237292, 0.002805725671720598], "p_contact_point": 0.00017875585921982997, "ci_contact": [9.404859007574736e-05, 0.0003397309759927954], "p_contact_upper_bound_USED": 0.0003397309759927954, "n_valid_snmac": 50348, "n_valid_contact": 50348}, {"b_size_class": 4, "b_h_m": 1.6183, "b_v_m": 0.3122, "v_B_mph": 40, "r_max_m": 300.0, "p_snmac": 0.00321760546595694, "ci_snmac": [0.0027593883076396063, 0.003751626773087848], "p_contact_point": 0.0003972352427107333, "ci_contact": [0.00025717281813264644, 0.0006135321770943801], "p_contact_upper_bound_USED": 0.0006135321770943801, "n_valid_snmac": 50348, "n_valid_contact": 50348}, {"b_size_class": 4, "b_h_m": 1.6183, "b_v_m": 0.3122, "v_B_mph": 50, "r_max_m": 300.0, "p_snmac": 0.0032374672280924763, "ci_snmac": [0.0027777336322810575, 0.0037730019420062584], "p_contact_point": 0.0002184793834909033, "ci_contact": [0.00012200256932335437, 0.00039121798386491274], "p_contact_upper_bound_USED": 0.00039121798386491274, "n_valid_snmac": 50348, "n_valid_contact": 50348}, {"b_size_class": 4, "b_h_m": 1.6183, "b_v_m": 0.3122, "v_B_mph": 60, "r_max_m": 300.0, "p_snmac": 0.003257328990228013, "ci_snmac": [0.0027960836150404513, 0.0037943724528067277], "p_contact_point": 0.0003376499563041233, "ci_contact": [0.0002108304986747226, 0.0005407130158727176], "p_contact_upper_bound_USED": 0.0005407130158727176, "n_valid_snmac": 50348, "n_valid_contact": 50348}, {"b_size_class": 5, "b_h_m": 3.0, "b_v_m": 0.5, "v_B_mph": 30, "r_max_m": 300.0, "p_snmac": 0.0028799555096528165, "ci_snmac": [0.0024482746986916114, 0.003387491991518186], "p_contact_point": 0.00029792643203304997, "ci_contact": [0.00018056150550750595, 0.0004915410219202099], "p_contact_upper_bound_USED": 0.0004915410219202099, "n_valid_snmac": 50348, "n_valid_contact": 50348}, {"b_size_class": 5, "b_h_m": 3.0, "b_v_m": 0.5, "v_B_mph": 40, "r_max_m": 300.0, "p_snmac": 0.0035751171843965996, "ci_snmac": [0.0030902842762868623, 0.00413569968851811], "p_contact_point": 0.0004965440533884166, "ci_contact": [0.00033636750736755456, 0.000732939955658783], "p_contact_upper_bound_USED": 0.000732939955658783, "n_valid_snmac": 50348, "n_valid_contact": 50348}, {"b_size_class": 5, "b_h_m": 3.0, "b_v_m": 0.5, "v_B_mph": 50, "r_max_m": 300.0, "p_snmac": 0.0035949789465321365, "ci_snmac": [0.0031087074766496894, 0.004156996981715146], "p_contact_point": 0.00041709700484627, "ci_contact": [0.00027283400587808557, 0.0006375914829088033], "p_contact_upper_bound_USED": 0.0006375914829088033, "n_valid_snmac": 50348, "n_valid_contact": 50348}, {"b_size_class": 5, "b_h_m": 3.0, "b_v_m": 0.5, "v_B_mph": 60, "r_max_m": 300.0, "p_snmac": 0.003853181854294113, "ci_snmac": [0.0033485604363025067, 0.004433510438340537], "p_contact_point": 0.0004965440533884166, "ci_contact": [0.00033636750736755456, 0.000732939955658783], "p_contact_upper_bound_USED": 0.000732939955658783, "n_valid_snmac": 50348, "n_valid_contact": 50348}, {"b_size_class": 1, "b_h_m": 0.254, "b_v_m": 0.076, "v_B_mph": 30, "r_max_m": 500.0, "p_snmac": 0.0009533645825057599, "ci_snmac": [0.0007191942671514307, 0.001263684547751737], "p_contact_point": 5.9585286406609996e-05, "ci_contact": [2.0264210004330285e-05, 0.00017519239470503947], "p_contact_upper_bound_USED": 0.00017519239470503947, "n_valid_snmac": 50348, "n_valid_contact": 50348}, {"b_size_class": 1, "b_h_m": 0.254, "b_v_m": 0.076, "v_B_mph": 40, "r_max_m": 500.0, "p_snmac": 0.00137046158735203, "ci_snmac": [0.0010831378552153782, 0.001733871324444895], "p_contact_point": 0.00011917057281321999, "ci_contact": [5.46173049372692e-05, 0.0002600007804516871], "p_contact_upper_bound_USED": 0.0002600007804516871, "n_valid_snmac": 50348, "n_valid_contact": 50348}, {"b_size_class": 1, "b_h_m": 0.254, "b_v_m": 0.076, "v_B_mph": 50, "r_max_m": 500.0, "p_snmac": 0.0014697703980297132, "ci_snmac": [0.001171029646150215, 0.0018445820013093688], "p_contact_point": 5.9585286406609996e-05, "ci_contact": [2.0264210004330285e-05, 0.00017519239470503947], "p_contact_upper_bound_USED": 0.00017519239470503947, "n_valid_snmac": 50348, "n_valid_contact": 50348}, {"b_size_class": 1, "b_h_m": 0.254, "b_v_m": 0.076, "v_B_mph": 60, "r_max_m": 500.0, "p_snmac": 0.00160880273297847, "ci_snmac": [0.00129470226058297, 0.0019989528417956484], "p_contact_point": 0.00013903233494875664, "ci_contact": [6.734924687944116e-05, 0.00028698933206937723], "p_contact_upper_bound_USED": 0.00028698933206937723, "n_valid_snmac": 50348, "n_valid_contact": 50348}, {"b_size_class": 2, "b_h_m": 0.4709, "b_v_m": 0.1217, "v_B_mph": 30, "r_max_m": 500.0, "p_snmac": 0.0010526733931834433, "ci_snmac": [0.0008049462778153039, 0.0013765350048871741], "p_contact_point": 5.9585286406609996e-05, "ci_contact": [2.0264210004330285e-05, 0.00017519239470503947], "p_contact_upper_bound_USED": 0.00017519239470503947, "n_valid_snmac": 50348, "n_valid_contact": 50348}, {"b_size_class": 2, "b_h_m": 0.4709, "b_v_m": 0.1217, "v_B_mph": 40, "r_max_m": 500.0, "p_snmac": 0.0013903233494875664, "ci_snmac": [0.0011006842471125147, 0.0017560454261076205], "p_contact_point": 0.00011917057281321999, "ci_contact": [5.46173049372692e-05, 0.0002600007804516871], "p_contact_upper_bound_USED": 0.0002600007804516871, "n_valid_snmac": 50348, "n_valid_contact": 50348}, {"b_size_class": 2, "b_h_m": 0.4709, "b_v_m": 0.1217, "v_B_mph": 50, "r_max_m": 500.0, "p_snmac": 0.0015293556844363232, "ci_snmac": [0.0012239476603737689, 0.001910825467765401], "p_contact_point": 5.9585286406609996e-05, "ci_contact": [2.0264210004330285e-05, 0.00017519239470503947], "p_contact_upper_bound_USED": 0.00017519239470503947, "n_valid_snmac": 50348, "n_valid_contact": 50348}, {"b_size_class": 2, "b_h_m": 0.4709, "b_v_m": 0.1217, "v_B_mph": 60, "r_max_m": 500.0, "p_snmac": 0.00166838801938508, "ci_snmac": [0.0013479071854399472, 0.002064909397618259], "p_contact_point": 0.00017875585921982997, "ci_contact": [9.404859007574736e-05, 0.0003397309759927954], "p_contact_upper_bound_USED": 0.0003397309759927954, "n_valid_snmac": 50348, "n_valid_contact": 50348}, {"b_size_class": 3, "b_h_m": 0.8729, "b_v_m": 0.1949, "v_B_mph": 30, "r_max_m": 500.0, "p_snmac": 0.0011321204417255898, "ci_snmac": [0.0008739956459425998, 0.001466367610999327], "p_contact_point": 5.9585286406609996e-05, "ci_contact": [2.0264210004330285e-05, 0.00017519239470503947], "p_contact_upper_bound_USED": 0.00017519239470503947, "n_valid_snmac": 50348, "n_valid_contact": 50348}, {"b_size_class": 3, "b_h_m": 0.8729, "b_v_m": 0.1949, "v_B_mph": 40, "r_max_m": 500.0, "p_snmac": 0.0015492174465718599, "ci_snmac": [0.0012416157130212152, 0.0019328779086778174], "p_contact_point": 0.00015889409708429332, "ci_contact": [8.051674589700119e-05, 0.0003135423266116794], "p_contact_upper_bound_USED": 0.0003135423266116794, "n_valid_snmac": 50348, "n_valid_contact": 50348}, {"b_size_class": 3, "b_h_m": 0.8729, "b_v_m": 0.1949, "v_B_mph": 50, "r_max_m": 500.0, "p_snmac": 0.0016485262572495433, "ci_snmac": [0.0013301594520628022, 0.002042936637435541], "p_contact_point": 5.9585286406609996e-05, "ci_contact": [2.0264210004330285e-05, 0.00017519239470503947], "p_contact_upper_bound_USED": 0.00017519239470503947, "n_valid_snmac": 50348, "n_valid_contact": 50348}, {"b_size_class": 3, "b_h_m": 0.8729, "b_v_m": 0.1949, "v_B_mph": 60, "r_max_m": 500.0, "p_snmac": 0.0017478350679272264, "ci_snmac": [0.0014190205755173365, 0.002152677981780317], "p_contact_point": 0.00017875585921982997, "ci_contact": [9.404859007574736e-05, 0.0003397309759927954], "p_contact_upper_bound_USED": 0.0003397309759927954, "n_valid_snmac": 50348, "n_valid_contact": 50348}, {"b_size_class": 4, "b_h_m": 1.6183, "b_v_m": 0.3122, "v_B_mph": 30, "r_max_m": 500.0, "p_snmac": 0.0012314292524032732, "ci_snmac": [0.0009608011015264015, 0.0015781646232148358], "p_contact_point": 0.00011917057281321999, "ci_contact": [5.46173049372692e-05, 0.0002600007804516871], "p_contact_upper_bound_USED": 0.0002600007804516871, "n_valid_snmac": 50348, "n_valid_contact": 50348}, {"b_size_class": 4, "b_h_m": 1.6183, "b_v_m": 0.3122, "v_B_mph": 40, "r_max_m": 500.0, "p_snmac": 0.001708111543656153, "ci_snmac": [0.0013834398127786879, 0.0021088177573992412], "p_contact_point": 0.0002184793834909033, "ci_contact": [0.00012200256932335437, 0.00039121798386491274], "p_contact_upper_bound_USED": 0.00039121798386491274, "n_valid_snmac": 50348, "n_valid_contact": 50348}, {"b_size_class": 4, "b_h_m": 1.6183, "b_v_m": 0.3122, "v_B_mph": 50, "r_max_m": 500.0, "p_snmac": 0.0018074203543338365, "ci_snmac": [0.0014724784722435287, 0.002218381565733712], "p_contact_point": 7.944704854214666e-05, "ci_contact": [3.0895326056642875e-05, 0.00020428177221258907], "p_contact_upper_bound_USED": 0.00020428177221258907, "n_valid_snmac": 50348, "n_valid_contact": 50348}, {"b_size_class": 4, "b_h_m": 1.6183, "b_v_m": 0.3122, "v_B_mph": 60, "r_max_m": 500.0, "p_snmac": 0.0018868674028759832, "ci_snmac": [0.0015439098200871085, 0.002305832192129581], "p_contact_point": 0.0002184793834909033, "ci_contact": [0.00012200256932335437, 0.00039121798386491274], "p_contact_upper_bound_USED": 0.00039121798386491274, "n_valid_snmac": 50348, "n_valid_contact": 50348}, {"b_size_class": 5, "b_h_m": 3.0, "b_v_m": 0.5, "v_B_mph": 30, "r_max_m": 500.0, "p_snmac": 0.0014697703980297132, "ci_snmac": [0.001171029646150215, 0.0018445820013093688], "p_contact_point": 0.00019861762135536665, "ci_contact": [0.00010789108807005791, 0.000365608971558347], "p_contact_upper_bound_USED": 0.000365608971558347, "n_valid_snmac": 50348, "n_valid_contact": 50348}, {"b_size_class": 5, "b_h_m": 3.0, "b_v_m": 0.5, "v_B_mph": 40, "r_max_m": 500.0, "p_snmac": 0.002006037975689203, "ci_snmac": [0.0016513653592011466, 0.0024366996143747157], "p_contact_point": 0.00037737348057519663, "ci_contact": [0.00024161317818053793, 0.0005893713234866265], "p_contact_upper_bound_USED": 0.0005893713234866265, "n_valid_snmac": 50348, "n_valid_contact": 50348}, {"b_size_class": 5, "b_h_m": 3.0, "b_v_m": 0.5, "v_B_mph": 50, "r_max_m": 500.0, "p_snmac": 0.0021053467863668867, "ci_snmac": [0.001741173896275843, 0.0025454935450993305], "p_contact_point": 0.00019861762135536665, "ci_contact": [0.00010789108807005791, 0.000365608971558347], "p_contact_upper_bound_USED": 0.000365608971558347, "n_valid_snmac": 50348, "n_valid_contact": 50348}, {"b_size_class": 5, "b_h_m": 3.0, "b_v_m": 0.5, "v_B_mph": 60, "r_max_m": 500.0, "p_snmac": 0.0021450703106379596, "ci_snmac": [0.0017771599872010069, 0.0025889484412938892], "p_contact_point": 0.00029792643203304997, "ci_contact": [0.00018056150550750595, 0.0004915410219202099], "p_contact_upper_bound_USED": 0.0004915410219202099, "n_valid_snmac": 50348, "n_valid_contact": 50348}];
+const P3B_GRID = [{"b_size_class": 1, "b_h_m": 0.254, "b_v_m": 0.076, "v_B_mph": 30, "r_max_m": 50.0, "p3b_snmac": 0.025205, "ci3b_snmac": [0.024527090535896464, 0.025901148838481634], "p3b_contact_point": 0.00148, "ci3b_contact": [0.001320824359695868, 0.0016583264167760172], "p3b_contact_upper_bound_USED": 0.0016583264167760172}, {"b_size_class": 1, "b_h_m": 0.254, "b_v_m": 0.076, "v_B_mph": 40, "r_max_m": 50.0, "p3b_snmac": 0.02891, "ci3b_snmac": [0.02818466375984048, 0.02965343328599146], "p3b_contact_point": 0.00179, "ci3b_contact": [0.0016140655511858754, 0.001985073316554753], "p3b_contact_upper_bound_USED": 0.001985073316554753}, {"b_size_class": 1, "b_h_m": 0.254, "b_v_m": 0.076, "v_B_mph": 50, "r_max_m": 50.0, "p3b_snmac": 0.031875, "ci3b_snmac": [0.031114050772534426, 0.03265393237204534], "p3b_contact_point": 0.002055, "ci3b_contact": [0.0018658634525691976, 0.0022632652351269682], "p3b_contact_upper_bound_USED": 0.0022632652351269682}, {"b_size_class": 1, "b_h_m": 0.254, "b_v_m": 0.076, "v_B_mph": 60, "r_max_m": 50.0, "p3b_snmac": 0.03614, "ci3b_snmac": [0.03533089003758248, 0.036966929265904336], "p3b_contact_point": 0.00213, "ci3b_contact": [0.0019372844808596978, 0.0023418413256918093], "p3b_contact_upper_bound_USED": 0.0023418413256918093}, {"b_size_class": 2, "b_h_m": 0.4709, "b_v_m": 0.1217, "v_B_mph": 30, "r_max_m": 50.0, "p3b_snmac": 0.026025, "ci3b_snmac": [0.025336284376100877, 0.026731923497762277], "p3b_contact_point": 0.001705, "ci3b_contact": [0.0015335053900155757, 0.0018956367430223327], "p3b_contact_upper_bound_USED": 0.0018956367430223327}, {"b_size_class": 2, "b_h_m": 0.4709, "b_v_m": 0.1217, "v_B_mph": 40, "r_max_m": 50.0, "p3b_snmac": 0.029955, "ci3b_snmac": [0.029216893218819536, 0.030711163683063484], "p3b_contact_point": 0.00196, "ci3b_contact": [0.00177549226403422, 0.0021636400731118474], "p3b_contact_upper_bound_USED": 0.0021636400731118474}, {"b_size_class": 2, "b_h_m": 0.4709, "b_v_m": 0.1217, "v_B_mph": 50, "r_max_m": 50.0, "p3b_snmac": 0.03285, "ci3b_snmac": [0.0320777406095882, 0.03364020508011099], "p3b_contact_point": 0.002285, "ci3b_contact": [0.0020850830973143924, 0.0025040367548714868], "p3b_contact_upper_bound_USED": 0.0025040367548714868}, {"b_size_class": 2, "b_h_m": 0.4709, "b_v_m": 0.1217, "v_B_mph": 60, "r_max_m": 50.0, "p3b_snmac": 0.03745, "ci3b_snmac": [0.03662673908973063, 0.03829102988976281], "p3b_contact_point": 0.002475, "ci3b_contact": [0.0022665825384282513, 0.002702530014857825], "p3b_contact_upper_bound_USED": 0.002702530014857825}, {"b_size_class": 3, "b_h_m": 0.8729, "b_v_m": 0.1949, "v_B_mph": 30, "r_max_m": 50.0, "p3b_snmac": 0.02751, "ci3b_snmac": [0.026802173777054464, 0.028235977050144443], "p3b_contact_point": 0.00209, "ci3b_contact": [0.001899185249898655, 0.0022999420932633364], "p3b_contact_upper_bound_USED": 0.0022999420932633364}, {"b_size_class": 3, "b_h_m": 0.8729, "b_v_m": 0.1949, "v_B_mph": 40, "r_max_m": 50.0, "p3b_snmac": 0.03156, "ci3b_snmac": [0.030802745479107656, 0.03233524976627967], "p3b_contact_point": 0.002465, "ci3b_contact": [0.0022570215823934764, 0.002692091355045221], "p3b_contact_upper_bound_USED": 0.002692091355045221}, {"b_size_class": 3, "b_h_m": 0.8729, "b_v_m": 0.1949, "v_B_mph": 50, "r_max_m": 50.0, "p3b_snmac": 0.0347, "ci3b_snmac": [0.03390677962248366, 0.035511094998980614], "p3b_contact_point": 0.00288, "ci3b_contact": [0.0026544956620393858, 0.003124601333065532], "p3b_contact_upper_bound_USED": 0.003124601333065532}, {"b_size_class": 3, "b_h_m": 0.8729, "b_v_m": 0.1949, "v_B_mph": 60, "r_max_m": 50.0, "p3b_snmac": 0.03961, "ci3b_snmac": [0.03876399996779866, 0.0404736860347286], "p3b_contact_point": 0.00306, "ci3b_contact": [0.0028272918539028525, 0.0033117982264548825], "p3b_contact_upper_bound_USED": 0.0033117982264548825}, {"b_size_class": 4, "b_h_m": 1.6183, "b_v_m": 0.3122, "v_B_mph": 30, "r_max_m": 50.0, "p3b_snmac": 0.03018, "ci3b_snmac": [0.02943917560612324, 0.030938872652325804], "p3b_contact_point": 0.002945, "ci3b_contact": [0.0027168688209832327, 0.0031922256771296465], "p3b_contact_upper_bound_USED": 0.0031922256771296465}, {"b_size_class": 4, "b_h_m": 1.6183, "b_v_m": 0.3122, "v_B_mph": 40, "r_max_m": 50.0, "p3b_snmac": 0.034755, "ci3b_snmac": [0.03396116606053864, 0.03556670644808622], "p3b_contact_point": 0.003415, "ci3b_contact": [0.0031686846812892036, 0.0036803917616504795], "p3b_contact_upper_bound_USED": 0.0036803917616504795}, {"b_size_class": 4, "b_h_m": 1.6183, "b_v_m": 0.3122, "v_B_mph": 50, "r_max_m": 50.0, "p3b_snmac": 0.038245, "ci3b_snmac": [0.03741328615141022, 0.03909445228794983], "p3b_contact_point": 0.00394, "ci3b_contact": [0.0036748088622065834, 0.004224247412720487], "p3b_contact_upper_bound_USED": 0.004224247412720487}, {"b_size_class": 4, "b_h_m": 1.6183, "b_v_m": 0.3122, "v_B_mph": 60, "r_max_m": 50.0, "p3b_snmac": 0.043515, "ci3b_snmac": [0.04262960568740196, 0.04441793030352672], "p3b_contact_point": 0.0045, "ci3b_contact": [0.004216028087032826, 0.004803006675347456], "p3b_contact_upper_bound_USED": 0.004803006675347456}, {"b_size_class": 5, "b_h_m": 3.0, "b_v_m": 0.5, "v_B_mph": 30, "r_max_m": 50.0, "p3b_snmac": 0.035725, "ci3b_snmac": [0.03492043258169879, 0.036547402664121806], "p3b_contact_point": 0.004905, "ci3b_contact": [0.004608173600290009, 0.005220845603909115], "p3b_contact_upper_bound_USED": 0.005220845603909115}, {"b_size_class": 5, "b_h_m": 3.0, "b_v_m": 0.5, "v_B_mph": 40, "r_max_m": 50.0, "p3b_snmac": 0.041025, "ci3b_snmac": [0.040164480807931606, 0.041903150836999754], "p3b_contact_point": 0.00557, "ci3b_contact": [0.005253182900526793, 0.005905810757523022], "p3b_contact_upper_bound_USED": 0.005905810757523022}, {"b_size_class": 5, "b_h_m": 3.0, "b_v_m": 0.5, "v_B_mph": 50, "r_max_m": 50.0, "p3b_snmac": 0.045025, "ci3b_snmac": [0.04412491487453595, 0.04594256310934693], "p3b_contact_point": 0.00632, "ci3b_contact": [0.005982041858935697, 0.006676922987667528], "p3b_contact_upper_bound_USED": 0.006676922987667528}, {"b_size_class": 5, "b_h_m": 3.0, "b_v_m": 0.5, "v_B_mph": 60, "r_max_m": 50.0, "p3b_snmac": 0.050855, "ci3b_snmac": [0.04990071313601479, 0.051826540886889934], "p3b_contact_point": 0.007205, "ci3b_contact": [0.0068436777912266634, 0.007585253057869584], "p3b_contact_upper_bound_USED": 0.007585253057869584}, {"b_size_class": 1, "b_h_m": 0.254, "b_v_m": 0.076, "v_B_mph": 30, "r_max_m": 150.0, "p3b_snmac": 0.006005, "ci3b_snmac": [0.005675756680111579, 0.006353220267299214], "p3b_contact_point": 0.000265, "ci3b_contact": [0.00020262088929170623, 0.00034657656172365465], "p3b_contact_upper_bound_USED": 0.00034657656172365465}, {"b_size_class": 1, "b_h_m": 0.254, "b_v_m": 0.076, "v_B_mph": 40, "r_max_m": 150.0, "p3b_snmac": 0.006545, "ci3b_snmac": [0.006200951607635037, 0.00690800459553421], "p3b_contact_point": 0.00039, "ci3b_contact": [0.00031253230168792965, 0.00048666034741966626], "p3b_contact_upper_bound_USED": 0.00048666034741966626}, {"b_size_class": 1, "b_h_m": 0.254, "b_v_m": 0.076, "v_B_mph": 50, "r_max_m": 150.0, "p3b_snmac": 0.007745, "ci3b_snmac": [0.007370137045634259, 0.008138773059220445], "p3b_contact_point": 0.000485, "ci3b_contact": [0.00039762420862600684, 0.0005915647910316877], "p3b_contact_upper_bound_USED": 0.0005915647910316877}, {"b_size_class": 1, "b_h_m": 0.254, "b_v_m": 0.076, "v_B_mph": 60, "r_max_m": 150.0, "p3b_snmac": 0.008055, "ci3b_snmac": [0.007672581129946433, 0.008456317066177013], "p3b_contact_point": 0.00052, "ci3b_contact": [0.00042922044495982735, 0.0006299672101636928], "p3b_contact_upper_bound_USED": 0.0006299672101636928}, {"b_size_class": 2, "b_h_m": 0.4709, "b_v_m": 0.1217, "v_B_mph": 30, "r_max_m": 150.0, "p3b_snmac": 0.006195, "ci3b_snmac": [0.005860473072476935, 0.0065484965760340555], "p3b_contact_point": 0.00032, "ci3b_contact": [0.0002506255833256921, 0.0004085697548502523], "p3b_contact_upper_bound_USED": 0.0004085697548502523}, {"b_size_class": 2, "b_h_m": 0.4709, "b_v_m": 0.1217, "v_B_mph": 40, "r_max_m": 150.0, "p3b_snmac": 0.006795, "ci3b_snmac": [0.006444308419050253, 0.007164638180303465], "p3b_contact_point": 0.000435, "ci3b_contact": [0.00035270553800080805, 0.0005364853824199925], "p3b_contact_upper_bound_USED": 0.0005364853824199925}, {"b_size_class": 2, "b_h_m": 0.4709, "b_v_m": 0.1217, "v_B_mph": 50, "r_max_m": 150.0, "p3b_snmac": 0.00796, "ci3b_snmac": [0.007579880599299955, 0.008359021246273395], "p3b_contact_point": 0.000555, "ci3b_contact": [0.0004609285642514819, 0.0006682577463378641], "p3b_contact_upper_bound_USED": 0.0006682577463378641}, {"b_size_class": 2, "b_h_m": 0.4709, "b_v_m": 0.1217, "v_B_mph": 60, "r_max_m": 150.0, "p3b_snmac": 0.00835, "ci3b_snmac": [0.00796052778446477, 0.008758359079156352], "p3b_contact_point": 0.000625, "ci3b_contact": [0.000524640597646811, 0.0007445430238741868], "p3b_contact_upper_bound_USED": 0.0007445430238741868}, {"b_size_class": 3, "b_h_m": 0.8729, "b_v_m": 0.1949, "v_B_mph": 30, "r_max_m": 150.0, "p3b_snmac": 0.006585, "ci3b_snmac": [0.006239880118463349, 0.006949074548095413], "p3b_contact_point": 0.00041, "ci3b_contact": [0.00033035479516015554, 0.0005088370856421979], "p3b_contact_upper_bound_USED": 0.0005088370856421979}, {"b_size_class": 3, "b_h_m": 0.8729, "b_v_m": 0.1949, "v_B_mph": 40, "r_max_m": 150.0, "p3b_snmac": 0.007215, "ci3b_snmac": [0.0068534224155918765, 0.007595508049351751], "p3b_contact_point": 0.000575, "ci3b_contact": [0.00047909367828072606, 0.0006900918640033775], "p3b_contact_upper_bound_USED": 0.0006900918640033775}, {"b_size_class": 3, "b_h_m": 0.8729, "b_v_m": 0.1949, "v_B_mph": 50, "r_max_m": 150.0, "p3b_snmac": 0.00839, "ci3b_snmac": [0.007999581283775217, 0.00879930404323542], "p3b_contact_point": 0.00066, "ci3b_contact": [0.0005566280489774417, 0.0007825542280093817], "p3b_contact_upper_bound_USED": 0.0007825542280093817}, {"b_size_class": 3, "b_h_m": 0.8729, "b_v_m": 0.1949, "v_B_mph": 60, "r_max_m": 150.0, "p3b_snmac": 0.00888, "ci3b_snmac": [0.00847816917136585, 0.00930069733216635], "p3b_contact_point": 0.00074, "ci3b_contact": [0.0006300275286750178, 0.000869151675090836], "p3b_contact_upper_bound_USED": 0.000869151675090836}, {"b_size_class": 4, "b_h_m": 1.6183, "b_v_m": 0.3122, "v_B_mph": 30, "r_max_m": 150.0, "p3b_snmac": 0.00716, "ci3b_snmac": [0.006799829225973249, 0.007539103351809795], "p3b_contact_point": 0.000625, "ci3b_contact": [0.000524640597646811, 0.0007445430238741868], "p3b_contact_upper_bound_USED": 0.0007445430238741868}, {"b_size_class": 4, "b_h_m": 1.6183, "b_v_m": 0.3122, "v_B_mph": 40, "r_max_m": 150.0, "p3b_snmac": 0.00796, "ci3b_snmac": [0.007579880599299955, 0.008359021246273395], "p3b_contact_point": 0.000805, "ci3b_contact": [0.0006899222693916534, 0.0009392544373821626], "p3b_contact_upper_bound_USED": 0.0009392544373821626}, {"b_size_class": 4, "b_h_m": 1.6183, "b_v_m": 0.3122, "v_B_mph": 50, "r_max_m": 150.0, "p3b_snmac": 0.00919, "ci3b_snmac": [0.008781115449891347, 0.009617739144909593], "p3b_contact_point": 0.000875, "ci3b_contact": [0.0007546490156653793, 0.0010145250020400882], "p3b_contact_upper_bound_USED": 0.0010145250020400882}, {"b_size_class": 4, "b_h_m": 1.6183, "b_v_m": 0.3122, "v_B_mph": 60, "r_max_m": 150.0, "p3b_snmac": 0.009895, "ci3b_snmac": [0.009470515738861622, 0.010338311773179525], "p3b_contact_point": 0.001035, "ci3b_contact": [0.0009033353098879076, 0.001185832561375621], "p3b_contact_upper_bound_USED": 0.001185832561375621}, {"b_size_class": 5, "b_h_m": 3.0, "b_v_m": 0.5, "v_B_mph": 30, "r_max_m": 150.0, "p3b_snmac": 0.008295, "ci3b_snmac": [0.007906833022036656, 0.008702055954423884], "p3b_contact_point": 0.0011, "ci3b_contact": [0.0009639908576089342, 0.0012551745166625567], "p3b_contact_upper_bound_USED": 0.0012551745166625567}, {"b_size_class": 5, "b_h_m": 3.0, "b_v_m": 0.5, "v_B_mph": 40, "r_max_m": 150.0, "p3b_snmac": 0.00942, "ci3b_snmac": [0.0090059606508556, 0.009852885108435053], "p3b_contact_point": 0.00126, "ci3b_contact": [0.001113814116762608, 0.0014253451110669438], "p3b_contact_upper_bound_USED": 0.0014253451110669438}, {"b_size_class": 5, "b_h_m": 3.0, "b_v_m": 0.5, "v_B_mph": 50, "r_max_m": 150.0, "p3b_snmac": 0.010765, "ci3b_snmac": [0.010322033726605803, 0.011226760364157299], "p3b_contact_point": 0.001395, "ci3b_contact": [0.0012407204185542432, 0.0015684336232149225], "p3b_contact_upper_bound_USED": 0.0015684336232149225}, {"b_size_class": 5, "b_h_m": 3.0, "b_v_m": 0.5, "v_B_mph": 60, "r_max_m": 150.0, "p3b_snmac": 0.01172, "ci3b_snmac": [0.011257612799761047, 0.01220114460442673], "p3b_contact_point": 0.001575, "ci3b_contact": [0.0014105160296099227, 0.0017586310974120611], "p3b_contact_upper_bound_USED": 0.0017586310974120611}, {"b_size_class": 1, "b_h_m": 0.254, "b_v_m": 0.076, "v_B_mph": 30, "r_max_m": 300.0, "p3b_snmac": 0.001365, "ci3b_snmac": [0.0012124839247362586, 0.0015366712694907705], "p3b_contact_point": 9e-05, "ci3b_contact": [5.693205889239635e-05, 0.00014227211479383547], "p3b_contact_upper_bound_USED": 0.00014227211479383547}, {"b_size_class": 1, "b_h_m": 0.254, "b_v_m": 0.076, "v_B_mph": 40, "r_max_m": 300.0, "p3b_snmac": 0.001625, "ci3b_snmac": [0.0014577865316981237, 0.0018113586745607542], "p3b_contact_point": 0.000125, "ci3b_contact": [8.467305665086475e-05, 0.00018452977250119288], "p3b_contact_upper_bound_USED": 0.00018452977250119288}, {"b_size_class": 1, "b_h_m": 0.254, "b_v_m": 0.076, "v_B_mph": 50, "r_max_m": 300.0, "p3b_snmac": 0.00195, "ci3b_snmac": [0.00176598599282858, 0.0021531467284701088], "p3b_contact_point": 0.00012, "ci3b_contact": [8.064409908777945e-05, 0.0001785589221405888], "p3b_contact_upper_bound_USED": 0.0001785589221405888}, {"b_size_class": 1, "b_h_m": 0.254, "b_v_m": 0.076, "v_B_mph": 60, "r_max_m": 300.0, "p3b_snmac": 0.002215, "ci3b_snmac": [0.002018303946553966, 0.002430818594700261], "p3b_contact_point": 0.000145, "ci3b_contact": [0.00010096445290001932, 0.0002082376079467959], "p3b_contact_upper_bound_USED": 0.0002082376079467959}, {"b_size_class": 2, "b_h_m": 0.4709, "b_v_m": 0.1217, "v_B_mph": 30, "r_max_m": 300.0, "p3b_snmac": 0.00142, "ci3b_snmac": [0.0012642652707533114, 0.0015948878106343011], "p3b_contact_point": 0.0001, "ci3b_contact": [6.473801828711995e-05, 0.00015446577124649067], "p3b_contact_upper_bound_USED": 0.00015446577124649067}, {"b_size_class": 2, "b_h_m": 0.4709, "b_v_m": 0.1217, "v_B_mph": 40, "r_max_m": 300.0, "p3b_snmac": 0.00168, "ci3b_snmac": [0.0015098322269463155, 0.0018693108664731462], "p3b_contact_point": 0.00013, "ci3b_contact": [8.87205486294126e-05, 0.00019048208844633441], "p3b_contact_upper_bound_USED": 0.00019048208844633441}, {"b_size_class": 2, "b_h_m": 0.4709, "b_v_m": 0.1217, "v_B_mph": 50, "r_max_m": 300.0, "p3b_snmac": 0.002, "ci3b_snmac": [0.0018135298716570596, 0.002205600928878523], "p3b_contact_point": 0.000145, "ci3b_contact": [0.00010096445290001932, 0.0002082376079467959], "p3b_contact_upper_bound_USED": 0.0002082376079467959}, {"b_size_class": 2, "b_h_m": 0.4709, "b_v_m": 0.1217, "v_B_mph": 60, "r_max_m": 300.0, "p3b_snmac": 0.002265, "ci3b_snmac": [0.0020659982225751604, 0.002483122397915961], "p3b_contact_point": 0.00017, "ci3b_contact": [0.00012166167947731275, 0.00023753942098794951], "p3b_contact_upper_bound_USED": 0.00023753942098794951}, {"b_size_class": 3, "b_h_m": 0.8729, "b_v_m": 0.1949, "v_B_mph": 30, "r_max_m": 300.0, "p3b_snmac": 0.001545, "ci3b_snmac": [0.001382174589149863, 0.0017269736903299847], "p3b_contact_point": 0.000135, "ci3b_contact": [9.278555298277497e-05, 0.00019641689201666142], "p3b_contact_upper_bound_USED": 0.00019641689201666142}, {"b_size_class": 3, "b_h_m": 0.8729, "b_v_m": 0.1949, "v_B_mph": 40, "r_max_m": 300.0, "p3b_snmac": 0.001765, "ci3b_snmac": [0.0015903602075218986, 0.0019587796206002824], "p3b_contact_point": 0.00015, "ci3b_contact": [0.00010507671565316534, 0.00021412515311733927], "p3b_contact_upper_bound_USED": 0.00021412515311733927}, {"b_size_class": 3, "b_h_m": 0.8729, "b_v_m": 0.1949, "v_B_mph": 50, "r_max_m": 300.0, "p3b_snmac": 0.002135, "ci3b_snmac": [0.0019420481487782734, 0.0023470774656969232], "p3b_contact_point": 0.00017, "ci3b_contact": [0.00012166167947731275, 0.00023753942098794951], "p3b_contact_upper_bound_USED": 0.00023753942098794951}, {"b_size_class": 3, "b_h_m": 0.8729, "b_v_m": 0.1949, "v_B_mph": 60, "r_max_m": 300.0, "p3b_snmac": 0.002435, "ci3b_snmac": [0.0022283441120036, 0.0026607699778929605], "p3b_contact_point": 0.00021, "ci3b_contact": [0.0001553743097291524, 0.0002838252541256251], "p3b_contact_upper_bound_USED": 0.0002838252541256251}, {"b_size_class": 4, "b_h_m": 1.6183, "b_v_m": 0.3122, "v_B_mph": 30, "r_max_m": 300.0, "p3b_snmac": 0.001735, "ci3b_snmac": [0.001561925986178958, 0.0019272149944010867], "p3b_contact_point": 0.00018, "ci3b_contact": [0.0001300275611743812, 0.00024917315513825987], "p3b_contact_upper_bound_USED": 0.00024917315513825987}, {"b_size_class": 4, "b_h_m": 1.6183, "b_v_m": 0.3122, "v_B_mph": 40, "r_max_m": 300.0, "p3b_snmac": 0.001965, "ci3b_snmac": [0.0017802458734019653, 0.0021688862716677916], "p3b_contact_point": 0.00022, "ci3b_contact": [0.00016389645971919933, 0.00029530271998295693], "p3b_contact_upper_bound_USED": 0.00029530271998295693}, {"b_size_class": 4, "b_h_m": 1.6183, "b_v_m": 0.3122, "v_B_mph": 50, "r_max_m": 300.0, "p3b_snmac": 0.00231, "ci3b_snmac": [0.0021089448288547025, 0.0025301740629496226], "p3b_contact_point": 0.00022, "ci3b_contact": [0.00016389645971919933, 0.00029530271998295693], "p3b_contact_upper_bound_USED": 0.00029530271998295693}, {"b_size_class": 4, "b_h_m": 1.6183, "b_v_m": 0.3122, "v_B_mph": 60, "r_max_m": 300.0, "p3b_snmac": 0.00261, "ci3b_snmac": [0.002395740490004495, 0.002843366877221195], "p3b_contact_point": 0.00029, "ci3b_contact": [0.00022436046252966404, 0.0003748360281041438], "p3b_contact_upper_bound_USED": 0.0003748360281041438}, {"b_size_class": 5, "b_h_m": 3.0, "b_v_m": 0.5, "v_B_mph": 30, "r_max_m": 300.0, "p3b_snmac": 0.00207, "ci3b_snmac": [0.0018801424804776273, 0.0022789856309896064], "p3b_contact_point": 0.0003, "ci3b_contact": [0.00023309522154685362, 0.000386100884934333], "p3b_contact_upper_bound_USED": 0.000386100884934333}, {"b_size_class": 5, "b_h_m": 3.0, "b_v_m": 0.5, "v_B_mph": 40, "r_max_m": 300.0, "p3b_snmac": 0.002275, "ci3b_snmac": [0.0020755401549480247, 0.0024935800813904755], "p3b_contact_point": 0.000325, "ci3b_contact": [0.00025502015981680064, 0.000414174986282833], "p3b_contact_upper_bound_USED": 0.000414174986282833}, {"b_size_class": 5, "b_h_m": 3.0, "b_v_m": 0.5, "v_B_mph": 50, "r_max_m": 300.0, "p3b_snmac": 0.00276, "ci3b_snmac": [0.0025394248293522954, 0.002999676775584076], "p3b_contact_point": 0.0004, "ci3b_contact": [0.0003214368166822468, 0.000497755448272728], "p3b_contact_upper_bound_USED": 0.000497755448272728}, {"b_size_class": 5, "b_h_m": 3.0, "b_v_m": 0.5, "v_B_mph": 60, "r_max_m": 300.0, "p3b_snmac": 0.00303, "ci3b_snmac": [0.0027984773738625192, 0.00328061385895308], "p3b_contact_point": 0.00045, "ci3b_contact": [0.0003661520784015304, 0.0005530382657903383], "p3b_contact_upper_bound_USED": 0.0005530382657903383}, {"b_size_class": 1, "b_h_m": 0.254, "b_v_m": 0.076, "v_B_mph": 30, "r_max_m": 500.0, "p3b_snmac": 0.000675, "ci3b_snmac": [0.0005703613274898523, 0.0007988203732680394], "p3b_contact_point": 3e-05, "ci3b_contact": [1.3749151616464284e-05, 6.545732698549472e-05], "p3b_contact_upper_bound_USED": 6.545732698549472e-05}, {"b_size_class": 1, "b_h_m": 0.254, "b_v_m": 0.076, "v_B_mph": 40, "r_max_m": 500.0, "p3b_snmac": 0.00076, "ci3b_snmac": [0.0006484337045480975, 0.0008907447309125141], "p3b_contact_point": 5.5e-05, "ci3b_contact": [3.071213226833309e-05, 9.849338595207293e-05], "p3b_contact_upper_bound_USED": 9.849338595207293e-05}, {"b_size_class": 1, "b_h_m": 0.254, "b_v_m": 0.076, "v_B_mph": 50, "r_max_m": 500.0, "p3b_snmac": 0.00062, "ci3b_snmac": [0.0005200777409581352, 0.0007391060726391731], "p3b_contact_point": 2e-05, "ci3b_contact": [7.777510265860507e-06, 5.14293524887197e-05], "p3b_contact_upper_bound_USED": 5.14293524887197e-05}, {"b_size_class": 1, "b_h_m": 0.254, "b_v_m": 0.076, "v_B_mph": 60, "r_max_m": 500.0, "p3b_snmac": 0.0008, "ci3b_snmac": [0.0006853075163485982, 0.0009338693825015284], "p3b_contact_point": 3e-05, "ci3b_contact": [1.3749151616464284e-05, 6.545732698549472e-05], "p3b_contact_upper_bound_USED": 6.545732698549472e-05}, {"b_size_class": 2, "b_h_m": 0.4709, "b_v_m": 0.1217, "v_B_mph": 30, "r_max_m": 500.0, "p3b_snmac": 0.00069, "ci3b_snmac": [0.0005841085309233276, 0.0008150725936056322], "p3b_contact_point": 3e-05, "ci3b_contact": [1.3749151616464284e-05, 6.545732698549472e-05], "p3b_contact_upper_bound_USED": 6.545732698549472e-05}, {"b_size_class": 2, "b_h_m": 0.4709, "b_v_m": 0.1217, "v_B_mph": 40, "r_max_m": 500.0, "p3b_snmac": 0.00081, "ci3b_snmac": [0.0006945382125238752, 0.0009446383021736301], "p3b_contact_point": 5.5e-05, "ci3b_contact": [3.071213226833309e-05, 9.849338595207293e-05], "p3b_contact_upper_bound_USED": 9.849338595207293e-05}, {"b_size_class": 2, "b_h_m": 0.4709, "b_v_m": 0.1217, "v_B_mph": 50, "r_max_m": 500.0, "p3b_snmac": 0.000635, "ci3b_snmac": [0.0005337714947222646, 0.0007554117426461118], "p3b_contact_point": 2.5e-05, "ci3b_contact": [1.0678393931431666e-05, 5.852827674683794e-05], "p3b_contact_upper_bound_USED": 5.852827674683794e-05}, {"b_size_class": 2, "b_h_m": 0.4709, "b_v_m": 0.1217, "v_B_mph": 60, "r_max_m": 500.0, "p3b_snmac": 0.000845, "ci3b_snmac": [0.0007268822394438234, 0.000982292930719508], "p3b_contact_point": 3.5e-05, "ci3b_contact": [1.6954202627203662e-05, 7.225208389844474e-05], "p3b_contact_upper_bound_USED": 7.225208389844474e-05}, {"b_size_class": 3, "b_h_m": 0.8729, "b_v_m": 0.1949, "v_B_mph": 30, "r_max_m": 500.0, "p3b_snmac": 0.00074, "ci3b_snmac": [0.0006300275286750178, 0.000869151675090836], "p3b_contact_point": 3.5e-05, "ci3b_contact": [1.6954202627203662e-05, 7.225208389844474e-05], "p3b_contact_upper_bound_USED": 7.225208389844474e-05}, {"b_size_class": 3, "b_h_m": 0.8729, "b_v_m": 0.1949, "v_B_mph": 40, "r_max_m": 500.0, "p3b_snmac": 0.00083, "ci3b_snmac": [0.0007130136698407845, 0.0009661620765514786], "p3b_contact_point": 6e-05, "ci3b_contact": [3.4323776267149664e-05, 0.00010488154987694576], "p3b_contact_upper_bound_USED": 0.00010488154987694576}, {"b_size_class": 3, "b_h_m": 0.8729, "b_v_m": 0.1949, "v_B_mph": 50, "r_max_m": 500.0, "p3b_snmac": 0.000665, "ci3b_snmac": [0.0005612042325719409, 0.0007879778523385719], "p3b_contact_point": 3.5e-05, "ci3b_contact": [1.6954202627203662e-05, 7.225208389844474e-05], "p3b_contact_upper_bound_USED": 7.225208389844474e-05}, {"b_size_class": 3, "b_h_m": 0.8729, "b_v_m": 0.1949, "v_B_mph": 60, "r_max_m": 500.0, "p3b_snmac": 0.000895, "ci3b_snmac": [0.000773181345586173, 0.001035991903814052], "p3b_contact_point": 5e-05, "ci3b_contact": [2.7159853423582097e-05, 9.20458568731345e-05], "p3b_contact_upper_bound_USED": 9.20458568731345e-05}, {"b_size_class": 4, "b_h_m": 1.6183, "b_v_m": 0.3122, "v_B_mph": 30, "r_max_m": 500.0, "p3b_snmac": 0.000835, "ci3b_snmac": [0.0007176354027602629, 0.0009715401515556897], "p3b_contact_point": 6e-05, "ci3b_contact": [3.4323776267149664e-05, 0.00010488154987694576], "p3b_contact_upper_bound_USED": 0.00010488154987694576}, {"b_size_class": 4, "b_h_m": 1.6183, "b_v_m": 0.3122, "v_B_mph": 40, "r_max_m": 500.0, "p3b_snmac": 0.00088, "ci3b_snmac": [0.0007592805436668447, 0.0010198932819623125], "p3b_contact_point": 7.5e-05, "ci3b_contact": [4.545304684855831e-05, 0.0001237517030666053], "p3b_contact_upper_bound_USED": 0.0001237517030666053}, {"b_size_class": 4, "b_h_m": 1.6183, "b_v_m": 0.3122, "v_B_mph": 50, "r_max_m": 500.0, "p3b_snmac": 0.00072, "ci3b_snmac": [0.0006116429430065138, 0.0008475370290645824], "p3b_contact_point": 5.5e-05, "ci3b_contact": [3.071213226833309e-05, 9.849338595207293e-05], "p3b_contact_upper_bound_USED": 9.849338595207293e-05}, {"b_size_class": 4, "b_h_m": 1.6183, "b_v_m": 0.3122, "v_B_mph": 60, "r_max_m": 500.0, "p3b_snmac": 0.00095, "ci3b_snmac": [0.0008242275329110246, 0.0010949436036497842], "p3b_contact_point": 8e-05, "ci3b_contact": [4.9245231004675756e-05, 0.00012995932683417726], "p3b_contact_upper_bound_USED": 0.00012995932683417726}, {"b_size_class": 5, "b_h_m": 3.0, "b_v_m": 0.5, "v_B_mph": 30, "r_max_m": 500.0, "p3b_snmac": 0.00097, "ci3b_snmac": [0.000842818209229867, 0.0011163521590256994], "p3b_contact_point": 0.000125, "ci3b_contact": [8.467305665086475e-05, 0.00018452977250119288], "p3b_contact_upper_bound_USED": 0.00018452977250119288}, {"b_size_class": 5, "b_h_m": 3.0, "b_v_m": 0.5, "v_B_mph": 40, "r_max_m": 500.0, "p3b_snmac": 0.00103, "ci3b_snmac": [0.0008986750671613551, 0.0011804929961784845], "p3b_contact_point": 0.00011, "ci3b_contact": [7.264640800713323e-05, 0.0001665569973738562], "p3b_contact_upper_bound_USED": 0.0001665569973738562}, {"b_size_class": 5, "b_h_m": 3.0, "b_v_m": 0.5, "v_B_mph": 50, "r_max_m": 500.0, "p3b_snmac": 0.000875, "ci3b_snmac": [0.0007546490156653793, 0.0010145250020400882], "p3b_contact_point": 0.000115, "ci3b_contact": [7.663480145056386e-05, 0.00017256841185411495], "p3b_contact_upper_bound_USED": 0.00017256841185411495}, {"b_size_class": 5, "b_h_m": 3.0, "b_v_m": 0.5, "v_B_mph": 60, "r_max_m": 500.0, "p3b_snmac": 0.001115, "ci3b_snmac": [0.000978006645243307, 0.0012711581527992523], "p3b_contact_point": 0.000125, "ci3b_contact": [8.467305665086475e-05, 0.00018452977250119288], "p3b_contact_upper_bound_USED": 0.00018452977250119288}];
+
+const RADII = [50, 150, 300, 500];
+const V_B_VALUES = [30, 40, 50, 60];
+const SIZE_CLASSES_DIMS = {
+  1: "10in/3in", 2: "0.47m/0.12m", 3: "0.87m/0.19m", 4: "1.62m/0.31m", 5: "3.0m/0.5m"
+};
+
+// --- Master formula constants (spec Section 13.6a) ---
+const C_3A = {50: 1.81e-6, 150: 5.91e-6, 300: 1.273e-5, 500: 2.14e-5};
+const C_3B = {50: 8.33e-8, 150: 5.75e-7, 300: 1.981e-6, 500: 5.314e-6};
+const C_3C = 3.72e-6;
+const ROUTE_MULT = {out_and_back: 1.0, triangular: 1.703};
+
+let state = {
+  radius: 300,
+  route: 'out_and_back',
+  timing: 'peaked',
+  n_del: 1000,
+  n_docks: 3,
+  calls_per_dock: 8,
+  loiter_min: 15,
+  threshold: 'snmac',
+  size_class: 1.0,
+  v_B: 45,
+  theme: 'dark',
+};
+
+function gridLookup(grid, sizeClass, vB, radius, field) {
+  return grid.find(c => c.b_size_class === sizeClass && c.v_B_mph === vB && c.r_max_m === radius)[field];
+}
+
+function bilinearInterp(grid, sizeContinuous, vBContinuous, radius, field) {
+  const sClamped = Math.max(1, Math.min(5, sizeContinuous));
+  const vClamped = Math.max(30, Math.min(60, vBContinuous));
+  const s0 = Math.max(1, Math.min(4, Math.floor(sClamped)));
+  const s1 = s0 + 1;
+  const sFrac = sClamped - s0;
+  const vIdx = V_B_VALUES.findIndex(v => v >= vClamped);
+  const v1 = vIdx <= 0 ? V_B_VALUES[1] : V_B_VALUES[vIdx];
+  const v0 = vIdx <= 0 ? V_B_VALUES[0] : V_B_VALUES[vIdx-1];
+  const vFrac = v1 === v0 ? 0 : (vClamped - v0) / (v1 - v0);
+  const q00 = gridLookup(grid, s0, v0, radius, field);
+  const q01 = gridLookup(grid, s0, v1, radius, field);
+  const q10 = gridLookup(grid, s1, v0, radius, field);
+  const q11 = gridLookup(grid, s1, v1, radius, field);
+  const top = q00*(1-vFrac) + q01*vFrac;
+  const bot = q10*(1-vFrac) + q11*vFrac;
+  return top*(1-sFrac) + bot*sFrac;
+}
+
+function fieldForThreshold(prefix, threshold) {
+  if (prefix === 'p3a') return threshold === 'snmac' ? 'p_snmac' : 'p_contact_upper_bound_USED';
+  return threshold === 'snmac' ? 'p3b_snmac' : 'p3b_contact_upper_bound_USED';
+}
+
+function computeAll() {
+  const totalDfr = state.n_docks * state.calls_per_dock;
+  const routeMult = ROUTE_MULT[state.route];
+
+  const k3a_daily = C_3A[state.radius] * state.n_del * totalDfr * state.loiter_min * routeMult;
+  const k3b_daily = C_3B[state.radius] * state.n_del * totalDfr * state.loiter_min * routeMult;
+  const k3c_daily = C_3C * state.n_del * totalDfr * routeMult;
+
+  const k3a_annual = k3a_daily * 365;
+  const k3b_annual = k3b_daily * 365;
+  const k3c_annual = k3c_daily * 365;
+
+  const field3a = fieldForThreshold('p3a', state.threshold);
+  const field3b = fieldForThreshold('p3b', state.threshold);
+  const p3a = bilinearInterp(P3A_GRID, state.size_class, state.v_B, state.radius, field3a);
+  const p3b = bilinearInterp(P3B_GRID, state.size_class, state.v_B, state.radius, field3b);
+
+  const p_annual = 1 - Math.pow(1-p3a, k3a_annual) * Math.pow(1-p3b, k3b_annual);
+  const p_daily = 1 - Math.pow(1-p3a, k3a_daily) * Math.pow(1-p3b, k3b_daily);
+
+  // --- Per-operation Scenario 3 probability: the chance that ONE randomly-chosen
+  // delivery flight (not "per year") experiences a Scenario 3 overlap. Includes
+  // Scenario 3c, since it's a genuine Scenario 3 sub-case per the spec's original
+  // definition (Section 1), even though Scenario 3c doesn't feed the collision-
+  // probability math above. Divides the daily EXPECTED COUNT by the number
+  // of delivery operations that day, then combines the three sub-cases the
+  // same way Scenario 3a/3b are combined elsewhere (1 - product of complements).
+  const rule3a_per_op = k3a_daily / state.n_del;
+  const rule3b_per_op = k3b_daily / state.n_del;
+  const rule3c_per_op = k3c_daily / state.n_del;
+  const rule3_per_op = 1 - (1 - rule3a_per_op) * (1 - rule3b_per_op) * (1 - rule3c_per_op);
+  const rule12_per_op = 1 - rule3_per_op;
+
+  // --- Update DOM ---
+  document.getElementById('total-dfr-readout').textContent = totalDfr;
+  document.getElementById('k3a-annual').textContent = k3a_annual.toFixed(2) + '/yr';
+  document.getElementById('k3a-daily').textContent = k3a_daily.toFixed(4) + '/day';
+  document.getElementById('k3b-annual').textContent = k3b_annual.toFixed(2) + '/yr';
+  document.getElementById('k3b-daily').textContent = k3b_daily.toFixed(4) + '/day';
+  document.getElementById('k3c-annual').textContent = k3c_annual.toFixed(2);
+  document.getElementById('k3c-daily').textContent = k3c_daily.toFixed(4);
+
+  document.getElementById('rule3-per-op').textContent = rule3_per_op.toExponential(3);
+  document.getElementById('rule12-per-op').textContent = (rule12_per_op * 100).toFixed(4) + '%';
+
+  document.getElementById('p3a-readout').textContent = p3a.toExponential(3);
+  document.getElementById('p3b-readout').textContent = p3b.toExponential(3);
+
+  document.getElementById('p-annual').textContent = p_annual.toExponential(3);
+  document.getElementById('p-daily').textContent = p_daily.toExponential(3);
+
+  const isPlaceholder = state.threshold === 'contact';
+  const badgeHtml = isPlaceholder
+    ? '<span class="badge placeholder">UPPER BOUND</span>'
+    : '<span class="badge confirmed">CONFIRMED</span>';
+  document.getElementById('badge-annual').innerHTML = badgeHtml;
+  document.getElementById('badge-daily').innerHTML = badgeHtml;
+}
+
+function setRoute(r) {
+  state.route = r;
+  document.getElementById('btn-oab').className = 'toggle-btn' + (r==='out_and_back'?' active':'');
+  document.getElementById('btn-tri').className = 'toggle-btn' + (r==='triangular'?' active':'');
+  computeAll();
+  drawSchematic();
+}
+function setTiming(t) {
+  state.timing = t;
+  document.getElementById('btn-peaked').className = 'toggle-btn' + (t==='peaked'?' active':'');
+  document.getElementById('btn-uniform').className = 'toggle-btn' + (t==='uniform'?' active':'');
+  computeAll();
+}
+function setThreshold(t) {
+  state.threshold = t;
+  document.getElementById('btn-snmac').className = 'toggle-btn' + (t==='snmac'?' active':'');
+  document.getElementById('btn-contact').className = 'toggle-btn' + (t==='contact'?' active':'');
+  const badge = document.getElementById('threshold-badge');
+  badge.innerHTML = t === 'contact'
+    ? '<span class="badge placeholder">UPPER-BOUND PLACEHOLDER</span>'
+    : '<span class="badge confirmed">CONFIRMED ESTIMATE</span>';
+  computeAll();
+}
+function setRadius(r) {
+  state.radius = r;
+  document.querySelectorAll('.radius-btn').forEach(b => {
+    b.className = 'radius-btn' + (parseInt(b.dataset.r) === r ? ' active' : '');
+  });
+  computeAll();
+  drawSchematic();
+}
+function toggleTheme() {
+  state.theme = state.theme === 'dark' ? 'light' : 'dark';
+  document.documentElement.setAttribute('data-theme', state.theme);
+  document.getElementById('opt-dark').className = 'opt' + (state.theme==='dark'?' active':'');
+  document.getElementById('opt-light').className = 'opt' + (state.theme==='light'?' active':'');
+  drawSchematic();
+}
+
+// --- Build radius selector buttons ---
+const radiusSel = document.getElementById('radius-selector');
+RADII.forEach(r => {
+  const btn = document.createElement('button');
+  btn.className = 'radius-btn' + (r === state.radius ? ' active' : '');
+  btn.textContent = r + 'm';
+  btn.dataset.r = r;
+  btn.onclick = () => setRadius(r);
+  radiusSel.appendChild(btn);
+});
+
+// --- Top-down schematic ---
+// Deterministic pool of 20 sample routes (golden-angle spread for good
+// visual distribution without a real RNG, so the picture doesn't jitter
+// when unrelated sliders move -- only the REVEALED COUNT changes with
+// deliveries/day, not the underlying points).
+function generateSampleRoutePool(n) {
+  const golden = 137.508;
+  const routes = [];
+  for (let i = 0; i < n; i++) {
+    const pickupAngle = (i * golden) % 360;
+    const pickupRadius = 0.30 + 0.55 * (((i * 3) % 7) / 7);
+    const dropoffAngle = (pickupAngle + 140 + (i * 19) % 60) % 360;
+    const dropoffRadius = 0.30 + 0.55 * (((i * 5) % 7) / 7);
+    routes.push({ pickup: [pickupRadius, pickupAngle], dropoff: [dropoffRadius, dropoffAngle] });
+  }
+  return routes;
+}
+const SAMPLE_ROUTES_POOL = generateSampleRoutePool(20);
+
+function routeCountForDeliveries(n_del) {
+  // Between 0.5% and 1% of the current slider value; using the midpoint
+  // (0.75%) as a single deterministic figure, floored at 2 for visibility.
+  return Math.max(2, Math.min(SAMPLE_ROUTES_POOL.length, Math.round(n_del * 0.0075)));
+}
+
+// Deliberately exaggerated, clearly-labeled radius-to-pixel mapping for the
+// loiter circle -- true-to-scale would make even 500m an all-but-invisible
+// dot against an 8,047m region radius.
+const LOITER_PX = {50: 6, 150: 12, 300: 20, 500: 30};
+
+function polarToXY(radiusFrac, angleDeg, viewRadiusPx) {
+  const rad = (angleDeg * Math.PI) / 180;
+  const r = radiusFrac * viewRadiusPx;
+  return [r * Math.cos(rad), r * Math.sin(rad)];
+}
+
+function drawSchematic() {
+  const VIEW = 320, CX = 160, CY = 160, R_PX = 130;
+  const themeColors = state.theme === 'dark'
+    ? { region: '#223047', hub: '#E6EDF5', dock: '#F2A65A', route: '#4FD1C5', loiter: '#F2A65A' }
+    : { region: '#D7DEE8', hub: '#12203A', dock: '#C97A1F', route: '#0E8F80', loiter: '#C97A1F' };
+
+  let svg = `<svg viewBox="0 0 ${VIEW} ${VIEW}" width="100%" height="280">`;
+
+  // Region boundary
+  svg += `<circle cx="${CX}" cy="${CY}" r="${R_PX}" fill="none" stroke="${themeColors.region}" stroke-width="1.5" stroke-dasharray="4,3"/>`;
+
+  // Sample routes -- count scales with deliveries/day slider
+  const numRoutes = routeCountForDeliveries(state.n_del);
+  SAMPLE_ROUTES_POOL.slice(0, numRoutes).forEach(route => {
+    const [px, py] = polarToXY(route.pickup[0], route.pickup[1], R_PX);
+    if (state.route === 'out_and_back') {
+      svg += `<line x1="${CX}" y1="${CY}" x2="${CX+px}" y2="${CY+py}" stroke="${themeColors.route}" stroke-width="1.3" opacity="0.6"/>`;
+      svg += `<circle cx="${CX+px}" cy="${CY+py}" r="2.5" fill="${themeColors.route}"/>`;
+    } else {
+      const [dx, dy] = polarToXY(route.dropoff[0], route.dropoff[1], R_PX);
+      svg += `<line x1="${CX}" y1="${CY}" x2="${CX+px}" y2="${CY+py}" stroke="${themeColors.route}" stroke-width="1.3" opacity="0.6"/>`;
+      svg += `<line x1="${CX+px}" y1="${CY+py}" x2="${CX+dx}" y2="${CY+dy}" stroke="${themeColors.route}" stroke-width="1.3" opacity="0.6"/>`;
+      svg += `<line x1="${CX+dx}" y1="${CY+dy}" x2="${CX}" y2="${CY}" stroke="${themeColors.route}" stroke-width="1.3" opacity="0.6"/>`;
+      svg += `<circle cx="${CX+px}" cy="${CY+py}" r="2.5" fill="${themeColors.route}"/>`;
+      svg += `<circle cx="${CX+dx}" cy="${CY+dy}" r="2.5" fill="${themeColors.route}"/>`;
+    }
+  });
+
+  // Docks, evenly spaced at 60% of region radius (matches exposure model
+  // convention). Loiter volumes are OFFSET from the dock -- the DFR flies
+  // a transit leg (orange line) from the dock to the call/loiter location,
+  // it does not loiter at the dock itself.
+  const dockAngleStep = 360 / state.n_docks;
+  const loiterPx = LOITER_PX[state.radius];
+  const TRANSIT_OFFSET_PX = 38;
+  for (let i = 0; i < state.n_docks; i++) {
+    const angleDeg = i * dockAngleStep;
+    const [ddx, ddy] = polarToXY(0.6, angleDeg, R_PX);
+    const dockX = CX + ddx, dockY = CY + ddy;
+    svg += `<rect x="${dockX-4}" y="${dockY-4}" width="8" height="8" fill="${themeColors.dock}"/>`;
+
+    // Show a loiter event on the first two docks only, offset at a fixed
+    // (deterministic, per-dock-varied) angle so it doesn't always point the
+    // same screen direction, but never jitters between renders.
+    if (i < 2) {
+      const transitAngleRad = ((angleDeg + 50 + i * 35) * Math.PI) / 180;
+      const loiterX = dockX + TRANSIT_OFFSET_PX * Math.cos(transitAngleRad);
+      const loiterY = dockY + TRANSIT_OFFSET_PX * Math.sin(transitAngleRad);
+      svg += `<line x1="${dockX}" y1="${dockY}" x2="${loiterX}" y2="${loiterY}" stroke="${themeColors.loiter}" stroke-width="1.5" stroke-dasharray="3,2"/>`;
+      svg += `<circle cx="${loiterX}" cy="${loiterY}" r="${loiterPx}" fill="${themeColors.loiter}" opacity="0.25" stroke="${themeColors.loiter}" stroke-width="1"/>`;
+    }
+  }
+
+  // Hub at center
+  svg += `<circle cx="${CX}" cy="${CY}" r="5" fill="${themeColors.hub}"/>`;
+  svg += `<text x="${CX}" y="${CY-10}" font-size="9" fill="${themeColors.hub}" text-anchor="middle" font-family="IBM Plex Mono, monospace">HUB</text>`;
+
+  svg += `</svg>`;
+  document.getElementById('schematic-container').innerHTML = svg;
+  document.getElementById('schematic-legend').innerHTML =
+    `5-mile region boundary (dashed) · ${state.n_docks} dock(s) at 60% radius · ` +
+    `${numRoutes} illustrative routes shown (~0.75% of ${state.n_del.toLocaleString()} deliveries/day) · ` +
+    `orange dashed line = DFR transit from dock to loiter site · loiter circle at ${state.radius}m (exaggerated for visibility, not to true scale)`;
+}
+document.getElementById('ndel-slider').addEventListener('input', e => {
+  state.n_del = parseFloat(e.target.value);
+  document.getElementById('ndel-readout').textContent = state.n_del.toLocaleString();
+  computeAll();
+  drawSchematic();
+});
+document.getElementById('ndocks-slider').addEventListener('input', e => {
+  state.n_docks = parseInt(e.target.value);
+  document.getElementById('ndocks-readout').textContent = state.n_docks;
+  computeAll();
+  drawSchematic();
+});
+document.getElementById('calls-slider').addEventListener('input', e => {
+  state.calls_per_dock = parseInt(e.target.value);
+  document.getElementById('calls-readout').textContent = state.calls_per_dock;
+  computeAll();
+});
+document.getElementById('loiter-slider').addEventListener('input', e => {
+  state.loiter_min = parseFloat(e.target.value);
+  document.getElementById('loiter-readout').textContent = state.loiter_min;
+  computeAll();
+});
+document.getElementById('size-slider').addEventListener('input', e => {
+  state.size_class = parseFloat(e.target.value);
+  const rounded = Math.round(state.size_class);
+  document.getElementById('size-readout').textContent = state.size_class.toFixed(1);
+  document.getElementById('size-dims-readout').textContent = SIZE_CLASSES_DIMS[rounded];
+  computeAll();
+});
+document.getElementById('vb-slider').addEventListener('input', e => {
+  state.v_B = parseFloat(e.target.value);
+  document.getElementById('vb-readout').textContent = state.v_B;
+  computeAll();
+});
+
+// --- Initial state ---
+setRoute('out_and_back');
+setTiming('peaked');
+setThreshold('snmac');
+document.getElementById('opt-dark').className = 'opt active';
+computeAll();
+drawSchematic();
+</script>
+</body>
+</html>
